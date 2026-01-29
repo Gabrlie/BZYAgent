@@ -1,21 +1,13 @@
 """
 JWT 认证相关功能
 """
-import os
 import bcrypt
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 from .models import User
-from dotenv import load_dotenv
-
-load_dotenv()
-
-# JWT 配置
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production-min-32-chars")
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+from .config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

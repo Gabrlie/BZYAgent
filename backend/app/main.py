@@ -14,6 +14,7 @@ from .models import (
 from .database import get_db
 from .auth import authenticate_user, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 from .middleware import JWTAuthMiddleware
+from .config import CORS_ORIGINS
 
 # 创建 FastAPI 应用
 app = FastAPI(
@@ -28,10 +29,7 @@ app.add_middleware(JWTAuthMiddleware)
 # 配置 CORS 中间件（必须在最后）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",  # Vite 默认端口
-        "http://localhost:8001",  # Ant Design Pro / umi 默认端口
-    ],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
