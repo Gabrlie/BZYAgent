@@ -335,14 +335,12 @@ async def send_message(
     db.add(user_msg)
     db.commit()
     
-    # 获取历史消息（最近 10 条）
-    history = db.query(Message).filter(
-        Message.user_id == user.id
-    ).order_by(Message.created_at.desc()).limit(10).all()
-    
+    # 只发送简单的初始对话，不加载历史记录
     messages = [
-        {"role": msg.role, "content": msg.content}
-        for msg in reversed(history)
+        {"role": "system", "content": "你是一个有帮助的AI助手。"},
+        {"role": "user", "content": "你好，你是谁"},
+        {"role": "assistant", "content": "你好！我是AI助手，很高兴为您服务。"},
+        {"role": "user", "content": message_data.content}
     ]
     
     # 流式生成响应
