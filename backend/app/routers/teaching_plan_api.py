@@ -1,31 +1,28 @@
 """
 授课计划 API 端点（带进度推送）
 """
+import asyncio
 import json
-import math
-from fastapi import APIRouter, Request, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from .database import get_db
-from .models import User, Course, CourseDocument
-from .teaching_plan_service import generate_teaching_plan_schedule
-from .docx_service import render_docx_template
+from ..database import get_db
+from ..deps import get_course_for_user, get_current_user
+from ..docx_service import render_docx_template
+from ..models import Course, CourseDocument, User
+from ..teaching_plan_service import generate_teaching_plan_schedule
+from ..utils.paths import UPLOADS_DIR
+from ..utils.sse import sse_event, sse_response
 
 
 router = APIRouter(prefix="/api/courses", tags=["授课计划生成"])
 
 
-def sse_event(data: dict) -> str:
-    """格式化 SSE 事件"""
-    return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
-
-
 @router.get("/{course_id}/generate-teaching-plan/stream")
 async def generate_teaching_plan_stream(
-    course_id: int,
-    request: Request,
+    course: Course = Depends(get_course_for_user),
+    user: User = Depends(get_current_user),
     teacher_name: str = Query(..., description="授课教师"),
     total_weeks: int = Query(18, description="总周数"),
     hour_per_class: int = Query(4, description="单次学时"),
@@ -44,23 +41,6 @@ async def generate_teaching_plan_stream(
     3. 组装数据并渲染模板 (90%)
     4. 保存到数据库 (100%)
     """
-    from datetime import datetime
-    import asyncio
-    
-    username = request.state.username
-    user = db.query(User).filter(User.username == username).first()
-    
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-    
-    course = db.query(Course).filter(
-        Course.id == course_id,
-        Course.user_id == user.id
-    ).first()
-    
-    if not course:
-        raise HTTPException(status_code=404, detail="课程不存在")
-    
     # 检查 AI 配置
     if not user.ai_api_key or not user.ai_base_url:
         raise HTTPException(status_code=400, detail="请先配置 AI API")
@@ -68,29 +48,35 @@ async def generate_teaching_plan_stream(
     async def event_generator():
         try:
             # 阶段 1: 验证课程信息
-            yield sse_event({
-                "stage": "validating",
-                "progress": 10,
-                "message": "正在检查课程信息..."
-            })
+            yield sse_event(
+                {
+                    "stage": "validating",
+                    "progress": 10,
+                    "message": "正在检查课程信息...",
+                }
+            )
             
             # 检查课程目录
             if not course.course_catalog:
-                yield sse_event({
-                    "stage": "error",
-                    "progress": 0,
-                    "message": "课程目录为空，请先在课程详情页编辑课程目录"
-                })
+                yield sse_event(
+                    {
+                        "stage": "error",
+                        "progress": 0,
+                        "message": "课程目录为空，请先在课程详情页编辑课程目录",
+                    }
+                )
                 return
             
             await asyncio.sleep(0.5)
             
             # 阶段 2: AI 生成 schedule
-            yield sse_event({
-                "stage": "generating",
-                "progress": 30,
-                "message": "正在调用 AI 生成授课计划表..."
-            })
+            yield sse_event(
+                {
+                    "stage": "generating",
+                    "progress": 30,
+                    "message": "正在调用 AI 生成授课计划表...",
+                }
+            )
             
             # 计算学时
             theory_hours = course.total_hours - course.practice_hours
@@ -111,18 +97,22 @@ async def generate_teaching_plan_stream(
                 skip_weeks=skip_weeks
             )
             
-            yield sse_event({
-                "stage": "generating",
-                "progress": 70,
-                "message": f"AI 生成完成，共 {len(schedule)} 次课"
-            })
+            yield sse_event(
+                {
+                    "stage": "generating",
+                    "progress": 70,
+                    "message": f"AI 生成完成，共 {len(schedule)} 次课",
+                }
+            )
             
             # 阶段 3: 组装数据并渲染
-            yield sse_event({
-                "stage": "rendering",
-                "progress": 85,
-                "message": "正在渲染 Word 文档..."
-            })
+            yield sse_event(
+                {
+                    "stage": "rendering",
+                    "progress": 85,
+                    "message": "正在渲染 Word 文档...",
+                }
+            )
             
             # 组装模板数据
             template_data = {
@@ -133,39 +123,36 @@ async def generate_teaching_plan_stream(
                 "total_hours": course.total_hours,
                 "theory_hours": theory_hours,
                 "practice_hours": course.practice_hours,
-                "schedule": schedule
+                "schedule": schedule,
             }
             
             # 渲染 Word 文档
             file_path = render_docx_template(
                 template_name="授课计划模板.docx",
                 data=template_data,
-                course_id=course_id
+                course_id=course.id
             )
             
             # 阶段 4: 保存到数据库
-            yield sse_event({
-                "stage": "saving",
-                "progress": 95,
-                "message": "正在保存到数据库..."
-            })
+            yield sse_event(
+                {
+                    "stage": "saving",
+                    "progress": 95,
+                    "message": "正在保存到数据库...",
+                }
+            )
             
             # 检查是否已有授课计划，如有则覆盖
             existing_doc = db.query(CourseDocument).filter(
-                CourseDocument.course_id == course_id,
+                CourseDocument.course_id == course.id,
                 CourseDocument.doc_type == "plan"
             ).first()
             
             if existing_doc:
                 # 删除旧文件
-                import os
-                old_file_path = os.path.join(
-                    os.path.dirname(__file__), "..",
-                    "uploads",
-                    existing_doc.file_url.lstrip("/uploads/")
-                )
-                if os.path.exists(old_file_path):
-                    os.remove(old_file_path)
+                old_file_path = UPLOADS_DIR / existing_doc.file_url.lstrip("/uploads/")
+                if old_file_path.exists():
+                    old_file_path.unlink()
                 
                 # 更新记录
                 existing_doc.title = f"{course.name} - 授课计划"
@@ -177,72 +164,51 @@ async def generate_teaching_plan_stream(
             else:
                 # 创建新记录
                 document = CourseDocument(
-                    course_id=course_id,
+                    course_id=course.id,
                     doc_type="plan",
                     title=f"{course.name} - 授课计划",
                     content=json.dumps(template_data, ensure_ascii=False),
-                    file_url=f"/uploads/{file_path}"
+                    file_url=f"/uploads/{file_path}",
                 )
                 db.add(document)
                 db.commit()
                 db.refresh(document)
             
             # 完成
-            yield sse_event({
-                "stage": "completed",
-                "progress": 100,
-                "message": "授课计划生成完成！",
-                "document_id": document.id,
-                "file_url": document.file_url,
-                "data": template_data
-            })
+            yield sse_event(
+                {
+                    "stage": "completed",
+                    "progress": 100,
+                    "message": "授课计划生成完成！",
+                    "document_id": document.id,
+                    "file_url": document.file_url,
+                    "data": template_data,
+                }
+            )
             
         except Exception as e:
             import traceback
             error_detail = traceback.format_exc()
             print(f"生成失败：{error_detail}")
-            yield sse_event({
-                "stage": "error",
-                "progress": 0,
-                "message": f"生成失败：{str(e)}"
-            })
+            yield sse_event(
+                {"stage": "error", "progress": 0, "message": f"生成失败：{str(e)}"}
+            )
     
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
-        }
-    )
+    return sse_response(event_generator())
 
 
 @router.get("/{course_id}/teaching-plans")
 async def get_teaching_plans(
-    course_id: int,
-    request: Request,
-    db: Session = Depends(get_db)
+    course: Course = Depends(get_course_for_user),
+    db: Session = Depends(get_db),
 ):
     """获取课程的授课计划列表"""
-    username = request.state.username
-    user = db.query(User).filter(User.username == username).first()
-    
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-    
-    course = db.query(Course).filter(
-        Course.id == course_id,
-        Course.user_id == user.id
-    ).first()
-    
-    if not course:
-        raise HTTPException(status_code=404, detail="课程不存在")
-    
-    documents = db.query(CourseDocument).filter(
-        CourseDocument.course_id == course_id,
-        CourseDocument.doc_type == "plan"
-    ).order_by(CourseDocument.created_at.desc()).all()
+    documents = (
+        db.query(CourseDocument)
+        .filter(CourseDocument.course_id == course.id, CourseDocument.doc_type == "plan")
+        .order_by(CourseDocument.created_at.desc())
+        .all()
+    )
     
     return {
         "documents": [
@@ -250,7 +216,7 @@ async def get_teaching_plans(
                 "id": doc.id,
                 "title": doc.title,
                 "created_at": doc.created_at,
-                "file_url": doc.file_url
+                "file_url": doc.file_url,
             }
             for doc in documents
         ]

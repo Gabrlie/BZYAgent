@@ -1,5 +1,5 @@
 /**
- * 单份文档管理组件 - 课程标准、授课计划、课程信息
+ * 单份文档管理组件 - 课程标准、授课计划
  */
 import { ProList } from '@ant-design/pro-components';
 import { Button, message, Space, Tag } from 'antd';
@@ -12,7 +12,7 @@ interface SingleDocumentsProps {
     courseId: number;
 }
 
-const docTypes = ['standard', 'plan', 'info'];
+const docTypes = ['standard', 'plan'];
 
 const SingleDocuments: React.FC<SingleDocumentsProps> = ({ courseId }) => {
     const intl = useIntl();

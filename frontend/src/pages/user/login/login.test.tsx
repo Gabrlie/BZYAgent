@@ -39,18 +39,13 @@ describe('Login Page', () => {
       />,
     );
 
-    await rootContainer.findAllByText('Ant Design');
+    await rootContainer.findAllByText('EduAgent Prime');
 
     act(() => {
       historyRef.current?.push('/user/login');
     });
 
-    expect(
-      rootContainer.baseElement?.querySelector('.ant-pro-form-login-desc')
-        ?.textContent,
-    ).toBe(
-      'Ant Design is the most influential web design specification in Xihu district',
-    );
+   
 
     expect(rootContainer.asFragment()).toMatchSnapshot();
 
@@ -68,10 +63,10 @@ describe('Login Page', () => {
       />,
     );
 
-    await rootContainer.findAllByText('Ant Design');
+    await rootContainer.findAllByText('EduAgent Prime');
 
     const userNameInput = await rootContainer.findByPlaceholderText(
-      'Username: admin or user',
+      '用户名: admin',
     );
 
     act(() => {
@@ -79,14 +74,14 @@ describe('Login Page', () => {
     });
 
     const passwordInput = await rootContainer.findByPlaceholderText(
-      'Password: ant.design',
+      '密码: admin123',
     );
 
     act(() => {
       fireEvent.change(passwordInput, { target: { value: 'ant.design' } });
     });
 
-    await (await rootContainer.findByText('Login')).click();
+    await (await rootContainer.findByText('进入工作台')).click();
 
     // 等待接口返回结果
     await waitTime(5000);
