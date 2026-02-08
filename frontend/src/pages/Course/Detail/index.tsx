@@ -2,7 +2,7 @@ import { PageContainer, ProCard, ProDescriptions } from '@ant-design/pro-compone
 import { Button, Image, message, Modal, Tabs, Empty, Input } from 'antd';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate, useParams, useIntl } from '@umijs/max';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getCourseDetail, deleteCourse, updateCourse, type Course } from '@/services/course';
 import SingleDocuments from './components/SingleDocuments';
 import MultiDocuments from './components/MultiDocuments';
@@ -17,6 +17,7 @@ const CourseDetail: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [catalogModalOpen, setCatalogModalOpen] = useState(false);
     const [editingCatalog, setEditingCatalog] = useState('');
+    const [activeTab, setActiveTab] = useState('single');
 
     useEffect(() => {
         loadCourseDetail();
@@ -72,6 +73,27 @@ const CourseDetail: React.FC = () => {
             message.error('更新失败');
         }
     };
+
+    const tabExtra = useMemo(() => {
+        if (activeTab === 'lesson') {
+            return (
+                <Button
+                    type="primary"
+                    onClick={() => navigate(`/courses/${params.id}/lesson-plan/generate`)}
+                >
+                    新建教案
+                </Button>
+            );
+        }
+        if (activeTab === 'courseware') {
+            return (
+                <Button type="primary" onClick={() => message.info('新建功能开发中')}>
+                    新建课件
+                </Button>
+            );
+        }
+        return null;
+    }, [activeTab, navigate, params.id]);
 
     if (!course) {
         return <PageContainer loading={loading} />;
@@ -182,6 +204,8 @@ const CourseDetail: React.FC = () => {
             <ProCard title={intl.formatMessage({ id: 'pages.courses.detail.documents' })}>
                 <Tabs
                     defaultActiveKey="single"
+                    onChange={setActiveTab}
+                    tabBarExtraContent={tabExtra ? { right: tabExtra } : undefined}
                     items={[
                         {
                             key: 'single',
