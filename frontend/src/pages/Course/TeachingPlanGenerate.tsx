@@ -10,6 +10,8 @@ import {
     Select,
     message,
     Space,
+    Row,
+    Col,
     Divider,
     Alert,
     Spin,
@@ -20,6 +22,7 @@ import GenerationProgressDisplay, {
     GenerationProgress,
 } from '@/components/GenerationProgress';
 import { generateTeachingPlanStream } from '@/services/teaching-plan';
+import { downloadDocument } from '@/services/document';
 import { getCourseDetail } from '@/services/course';
 
 /**
@@ -42,7 +45,8 @@ const TeachingPlanGenerate: React.FC = () => {
         hour_per_class: 4,
         classes_per_week: 1,
         final_review: true,
-        skip_weeks: '', // 新增
+        first_week_classes: 1,
+        skip_slots: [] as Array<{ week: number; class: number }>,
     });
     const [existingDoc, setExistingDoc] = useState<any>(null); // 已有文档
 
@@ -55,10 +59,34 @@ const TeachingPlanGenerate: React.FC = () => {
         const actualClasses = course ? Math.floor(course.total_hours / formValues.hour_per_class) : maxClasses;
         const actualClassesWithReview = formValues.final_review ? actualClasses - 1 : actualClasses;
 
-        // 验证：实际课次不能超过最大课次（移除差距限制，交由用户说明或AI处理）
-        const isValid = course
-            ? actualClasses <= maxClasses
-            : true;
+        const classesPerWeek = Math.min(Math.max(formValues.classes_per_week || 1, 1), 7);
+        const firstWeekClasses = Math.min(
+            Math.max(formValues.first_week_classes || 1, 1),
+            classesPerWeek,
+        );
+
+        const baseAvailableSlots = firstWeekClasses + (formValues.total_weeks - 1) * classesPerWeek;
+
+        const skipSlots = Array.isArray(formValues.skip_slots) ? formValues.skip_slots : [];
+        const skipSet = new Set(
+            skipSlots
+                .filter((item) => item?.week && item?.class)
+                .map((item) => `${item.week}-${item.class}`),
+        );
+
+        let availableSlots = 0;
+        for (let week = 1; week <= formValues.total_weeks; week += 1) {
+            const weekLimit = week === 1 ? firstWeekClasses : classesPerWeek;
+            for (let cls = 1; cls <= weekLimit; cls += 1) {
+                if (skipSet.has(`${week}-${cls}`)) {
+                    continue;
+                }
+                availableSlots += 1;
+            }
+        }
+
+        const diff = availableSlots - actualClasses;
+        const isValid = course ? diff >= 0 && diff <= 6 : true;
 
         return {
             maxClasses,        // 最大课次（周数 × 每周次数）
@@ -66,11 +94,22 @@ const TeachingPlanGenerate: React.FC = () => {
             actualClasses,     // 实际课次（根据总学时计算）
             actualClassesWithReview, // 考虑复习考核的实际课次
             courseHours: course?.total_hours || 0,
+            baseAvailableSlots,
+            availableSlots,    // 可用课次（第一周上课次数 + 不上课设置后）
+            diff,
             isValid,
         };
     };
 
     const scheduleInfo = calculateSchedule();
+    const showSkipSlots = scheduleInfo.baseAvailableSlots > scheduleInfo.actualClasses;
+
+    useEffect(() => {
+        if (!showSkipSlots && formValues.skip_slots.length > 0) {
+            form.setFieldsValue({ skip_slots: [] });
+            setFormValues((prev) => ({ ...prev, skip_slots: [] }));
+        }
+    }, [form, formValues.skip_slots.length, showSkipSlots]);
 
     useEffect(() => {
         loadCourseInfo();
@@ -114,9 +153,32 @@ const TeachingPlanGenerate: React.FC = () => {
             setDocumentId(null);
             setFileUrl(null);
 
+            const payload = {
+                teacher_name: values.teacher_name,
+                total_weeks: values.total_weeks,
+                hour_per_class: values.hour_per_class,
+                classes_per_week: values.classes_per_week,
+                final_review: values.final_review,
+                first_week_classes: values.first_week_classes,
+                skip_slots: (values.skip_slots || []).filter(
+                    (item: { week?: number; class?: number }) => {
+                        if (!item?.week || !item?.class) {
+                            return false;
+                        }
+                        if (item.week > values.total_weeks) {
+                            return false;
+                        }
+                        if (item.week === 1 && item.class > values.first_week_classes) {
+                            return false;
+                        }
+                        return item.class <= values.classes_per_week;
+                    },
+                ),
+            };
+
             await generateTeachingPlanStream(
                 Number(courseId),
-                values,
+                payload,
                 (progressData: GenerationProgress) => {
                     setProgress(progressData);
 
@@ -162,10 +224,16 @@ const TeachingPlanGenerate: React.FC = () => {
 
     const handleDownload = () => {
         if (documentId) {
-            window.open(`/api/documents/${documentId}/download`, '_blank');
+            downloadDocument(documentId);
             return;
         }
         if (fileUrl) {
+            const token = localStorage.getItem('token');
+            if (token && fileUrl.startsWith('/api/') && !fileUrl.includes('token=')) {
+                const separator = fileUrl.includes('?') ? '&' : '?';
+                window.open(`${fileUrl}${separator}token=${encodeURIComponent(token)}`, '_blank');
+                return;
+            }
             window.open(fileUrl, '_blank');
         }
     };
@@ -245,14 +313,25 @@ const TeachingPlanGenerate: React.FC = () => {
                                             hour_per_class: 4,
                                             classes_per_week: 1,
                                             final_review: true,
+                                            first_week_classes: 1,
+                                            skip_slots: [],
                                         }}
                                         onValuesChange={(_, allValues) => {
+                                            const nextClassesPerWeek = Math.min(allValues.classes_per_week || 1, 7);
+                                            const nextFirstWeekClasses = Math.min(
+                                                Math.max(allValues.first_week_classes || 1, 1),
+                                                nextClassesPerWeek,
+                                            );
+                                            if ((allValues.first_week_classes || 1) > nextClassesPerWeek) {
+                                                form.setFieldsValue({ first_week_classes: nextFirstWeekClasses });
+                                            }
                                             setFormValues({
                                                 total_weeks: allValues.total_weeks || 18,
                                                 hour_per_class: allValues.hour_per_class || 4,
-                                                classes_per_week: allValues.classes_per_week || 1,
+                                                classes_per_week: nextClassesPerWeek,
                                                 final_review: allValues.final_review ?? true,
-                                                skip_weeks: allValues.skip_weeks || '',
+                                                first_week_classes: nextFirstWeekClasses,
+                                                skip_slots: allValues.skip_slots || [],
                                             });
                                         }}
                                     >
@@ -264,73 +343,156 @@ const TeachingPlanGenerate: React.FC = () => {
                                             <Input placeholder="请输入授课教师姓名" />
                                         </Form.Item>
 
-                                        <Form.Item
-                                            label="总周数"
-                                            name="total_weeks"
-                                            rules={[{ required: true, message: '请输入总周数' }]}
-                                            tooltip="一般为 18 周，根据实际情况调整"
-                                        >
-                                            <InputNumber
-                                                min={1}
-                                                max={30}
-                                                placeholder="一般为 18 周"
-                                                style={{ width: 200 }}
-                                            />
-                                        </Form.Item>
+                                        <Row gutter={[16, 0]}>
+                                            <Col xs={24} md={8}>
+                                                <Form.Item
+                                                    label="总周数"
+                                                    name="total_weeks"
+                                                    rules={[{ required: true, message: '请输入总周数' }]}
+                                                    tooltip="一般为 18 周，根据实际情况调整"
+                                                >
+                                                    <InputNumber
+                                                        min={1}
+                                                        max={30}
+                                                        placeholder="一般为 18 周"
+                                                        style={{ width: '100%' }}
+                                                    />
+                                                </Form.Item>
+                                            </Col>
+                                            <Col xs={24} md={8}>
+                                                <Form.Item
+                                                    label="每周上课次数"
+                                                    name="classes_per_week"
+                                                    rules={[{ required: true, message: '请输入每周上课次数' }]}
+                                                    tooltip="用于计算周次"
+                                                >
+                                                    <InputNumber
+                                                        min={1}
+                                                        max={7}
+                                                        placeholder="一般为 1 次"
+                                                        style={{ width: '100%' }}
+                                                    />
+                                                </Form.Item>
+                                            </Col>
+                                            <Col xs={24} md={8}>
+                                                <Form.Item
+                                                    label="单次学时"
+                                                    name="hour_per_class"
+                                                    rules={[{ required: true, message: '请选择单次学时' }]}
+                                                    tooltip="每次课上多少学时"
+                                                >
+                                                    <Select
+                                                        style={{ width: '100%' }}
+                                                        options={[
+                                                            { value: 2, label: '2 学时' },
+                                                            { value: 4, label: '4 学时' },
+                                                            { value: 6, label: '6 学时' },
+                                                        ]}
+                                                    />
+                                                </Form.Item>
+                                            </Col>
+                                        </Row>
 
-                                        <Form.Item
-                                            label="单次学时"
-                                            name="hour_per_class"
-                                            rules={[{ required: true, message: '请选择单次学时' }]}
-                                            tooltip="每次课上多少学时"
-                                        >
-                                            <Select
-                                                style={{ width: 200 }}
-                                                options={[
-                                                    { value: 2, label: '2 学时' },
-                                                    { value: 4, label: '4 学时' },
-                                                    { value: 6, label: '6 学时' },
-                                                ]}
-                                            />
-                                        </Form.Item>
+                                        <Row gutter={[16, 0]}>
+                                            <Col xs={24} md={8}>
+                                                <Form.Item
+                                                    label="第一周上课次数"
+                                                    name="first_week_classes"
+                                                    rules={[{ required: true, message: '请输入第一周上课次数' }]}
+                                                    tooltip="第一周上几次课（不考虑星期）"
+                                                >
+                                                    <InputNumber
+                                                        min={1}
+                                                        max={formValues.classes_per_week}
+                                                        placeholder="第一周上课次数"
+                                                        style={{ width: '100%' }}
+                                                    />
+                                                </Form.Item>
+                                            </Col>
+                                            <Col xs={24} md={8}>
+                                                <Form.Item
+                                                    label="最后一次课为复习考核"
+                                                    name="final_review"
+                                                    valuePropName="checked"
+                                                    tooltip="开启后，最后一次课固定为'课程复习与考核'，AI 会少生成一次课的内容"
+                                                >
+                                                    <Switch />
+                                                </Form.Item>
+                                            </Col>
+                                        </Row>
 
-                                        <Form.Item
-                                            label="每周上课次数"
-                                            name="classes_per_week"
-                                            rules={[{ required: true, message: '请输入每周上课次数' }]}
-                                            tooltip="用于计算周次"
-                                        >
-                                            <InputNumber
-                                                min={1}
-                                                max={7}
-                                                placeholder="一般为 1 次"
-                                                style={{ width: 200 }}
-                                            />
-                                        </Form.Item>
-
-                                        <Form.Item
-                                            label="最后一次课为复习考核"
-                                            name="final_review"
-                                            valuePropName="checked"
-                                            tooltip="开启后，最后一次课固定为'课程复习与考核'，AI 会少生成一次课的内容"
-                                        >
-                                            <Switch />
-                                        </Form.Item>
-
-                                        {/* 排课调整说明 - 仅在实际课次少于最大课次时显示 */}
-                                        {scheduleInfo.maxClasses > scheduleInfo.actualClasses && (
-                                            <Form.Item
-                                                label="排课调整说明（哪周少课）"
-                                                name="skip_weeks"
-                                                tooltip="AI 将根据此说明调整排课，例如：'第1周只上1次课' 或 '第8周国庆放假'"
-                                                style={{ marginTop: 16, background: '#f6ffed', padding: 12, borderRadius: 6, border: '1px dashed #b7eb8f' }}
-                                            >
-                                                <Input.TextArea
-                                                    placeholder="请输入说明，例如：第1周少一次课，第8周国庆放假..."
-                                                    rows={2}
-                                                />
+                                        {showSkipSlots && (
+                                            <Form.Item label="不上课设置">
+                                                <Form.List name="skip_slots">
+                                                    {(fields, { add, remove }) => (
+                                                        <div>
+                                                            {fields.map((field) => (
+                                                                <Row
+                                                                    key={field.key}
+                                                                    gutter={[12, 0]}
+                                                                    align="middle"
+                                                                    style={{ marginBottom: 8 }}
+                                                                >
+                                                                    <Col xs={12} sm={8} md={6}>
+                                                                        <Form.Item
+                                                                            {...field}
+                                                                            name={[field.name, 'week']}
+                                                                            rules={[{ required: true, message: '请输入周次' }]}
+                                                                        >
+                                                                            <InputNumber
+                                                                                min={1}
+                                                                                max={formValues.total_weeks}
+                                                                                placeholder="周次"
+                                                                                style={{ width: '100%' }}
+                                                                            />
+                                                                        </Form.Item>
+                                                                    </Col>
+                                                                    <Col xs={12} sm={8} md={6}>
+                                                                        <Form.Item
+                                                                            {...field}
+                                                                            name={[field.name, 'class']}
+                                                                            rules={[{ required: true, message: '请输入课次' }]}
+                                                                        >
+                                                                            <InputNumber
+                                                                                min={1}
+                                                                                max={formValues.classes_per_week}
+                                                                                placeholder="课次"
+                                                                                style={{ width: '100%' }}
+                                                                            />
+                                                                        </Form.Item>
+                                                                    </Col>
+                                                                    <Col xs={24} sm={4} md={4}>
+                                                                        <Button
+                                                                            type="link"
+                                                                            danger
+                                                                            onClick={() => remove(field.name)}
+                                                                        >
+                                                                            移除
+                                                                        </Button>
+                                                                    </Col>
+                                                                </Row>
+                                                            ))}
+                                                            <Button
+                                                                type="dashed"
+                                                                onClick={() => add({ week: 1, class: 1 })}
+                                                                style={{ width: '100%' }}
+                                                            >
+                                                                新增不上课
+                                                            </Button>
+                                                        </div>
+                                                    )}
+                                                </Form.List>
                                             </Form.Item>
                                         )}
+
+                                        <Form.Item>
+                                            <Alert
+                                                type="info"
+                                                showIcon
+                                                message="提示"
+                                                description="AI 生成内容仅供参考，请结合课程实际情况核对并适当调整。"
+                                            />
+                                        </Form.Item>
 
                                         <Form.Item>
                                             <Button
@@ -342,9 +504,11 @@ const TeachingPlanGenerate: React.FC = () => {
                                             >
                                                 {generating
                                                     ? '生成中...'
-                                                    : existingDoc
-                                                        ? '重新生成授课计划'
-                                                        : '开始生成授课计划'}
+                                                    : !scheduleInfo.isValid
+                                                        ? '排课参数不足'
+                                                        : existingDoc
+                                                            ? '重新生成授课计划'
+                                                            : '开始生成授课计划'}
                                             </Button>
                                         </Form.Item>
                                     </Form>
@@ -360,6 +524,16 @@ const TeachingPlanGenerate: React.FC = () => {
                                             </div>
                                             <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
                                                 ({formValues.total_weeks} 周 × {formValues.classes_per_week} 次/周)
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <div style={{ color: '#666', marginBottom: 8 }}>可用课次</div>
+                                            <div style={{ fontSize: 20, fontWeight: 'bold', color: '#722ed1' }}>
+                                                {scheduleInfo.availableSlots} 次课
+                                            </div>
+                                            <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
+                                                (第一周上课次数与不上课设置后)
                                             </div>
                                         </div>
 
@@ -383,40 +557,23 @@ const TeachingPlanGenerate: React.FC = () => {
                                         <Divider style={{ margin: '8px 0' }} />
 
                                         {!scheduleInfo.isValid ? (
-                                            // 情况 1: 实际课次 > 最大课次（无法排下）
                                             <Alert
-                                                message="参数配置错误"
+                                                message="排课参数不足"
                                                 description={
                                                     <div>
                                                         课程需要 <strong>{scheduleInfo.actualClasses}</strong> 次课，
-                                                        但只有 <strong>{scheduleInfo.maxClasses}</strong> 次课时间。
+                                                        当前可用课次为 <strong>{scheduleInfo.availableSlots}</strong> 次。
                                                         <br />
-                                                        请增加周数或每周上课次数。
+                                                        差额为 <strong>{Math.abs(scheduleInfo.diff)}</strong> 次，
+                                                        差额不能超过 6。
+                                                        <br />
+                                                        请调整第一周上课次数、每周上课次数或不上课设置。
                                                     </div>
                                                 }
                                                 type="error"
                                                 showIcon
                                             />
-                                        ) : scheduleInfo.maxClasses > scheduleInfo.actualClasses ? (
-                                            // 情况 2: 实际课次 < 最大课次（需要调整说明）
-                                            <Alert
-                                                message="需配置排课调整说明"
-                                                description={
-                                                    <div>
-                                                        <div style={{ marginBottom: 4 }}>
-                                                            课程只需 <strong>{scheduleInfo.actualClasses}</strong> 次课，
-                                                            比计划少 <strong>{scheduleInfo.maxClasses - scheduleInfo.actualClasses}</strong> 次。
-                                                        </div>
-                                                        <div style={{ fontSize: 12 }}>
-                                                            请在左侧"排课调整说明"中指定哪周少课或不排课。
-                                                        </div>
-                                                    </div>
-                                                }
-                                                type="warning"
-                                                showIcon
-                                            />
                                         ) : (
-                                            // 情况 3: 完美匹配
                                             <Alert
                                                 message="配置匹配"
                                                 description={

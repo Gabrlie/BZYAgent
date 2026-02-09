@@ -54,7 +54,8 @@
 - `hour_per_class` 单次学时
 - `classes_per_week` 每周次数
 - `final_review` 最后一课是否复习考核
-- `skip_weeks` 排课调整说明
+- `first_week_classes` 第一周上课次数
+- `skip_slots` 不上课的周次与课次列表（JSON）
 
 - 教案生成
 - `sequence` 授课顺序

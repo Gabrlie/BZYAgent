@@ -22,8 +22,9 @@ sequenceDiagram
   participant FS as "Filesystem"
   FE->>BE: GET /api/courses/{id}/generate-teaching-plan/stream
   BE-->>FE: SSE progress
-  BE->>AI: 生成排课框架与内容
-  AI-->>BE: 教学计划 JSON
+  BE->>BE: 系统生成排课框架
+  BE->>AI: 生成授课计划内容
+  AI-->>BE: 教学计划内容 JSON
   BE->>FS: 渲染 Word 模板并保存
   BE-->>FE: SSE completed + file_url
   FE->>BE: GET /api/courses/{id}/documents/type/plan

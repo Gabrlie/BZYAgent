@@ -7,7 +7,8 @@
 - `total_hours` 课程总学时
 - `practice_hours` 实训学时
 - `final_review` 是否最后一次课为复习考核
-- `skip_weeks` 排课调整说明
+- `first_week_classes` 第一周上课次数
+- `skip_slots` 不上课的周次与课次列表
 
 ## 核心计算
 - 最大课次 `max_classes = total_weeks * classes_per_week`
@@ -16,10 +17,9 @@
 - 实训课次 `practice_classes_count = actual_classes - theory_classes_count`
 
 ## 生成流程
-1. 调用排课智能体生成周次框架 `[{ order, week }]`。
-2. 若生成失败，按顺序回退到默认排课公式。
-3. 根据课程目录与周次框架调用 AI 生成每次课的标题与任务列表。
-4. 若 `final_review = true`，追加最后一次课为“课程复习与考核”。
+1. 系统按 `first_week_classes` 与 `skip_slots` 生成周次框架 `[{ order, week }]`，允许可用课次比实际课次多 0-6 次（视为最后一周未排满）。
+2. 根据课程目录与周次框架调用 AI 生成每次课的标题与任务列表（AI 不参与排课）。
+3. 若 `final_review = true`，追加最后一次课为“课程复习与考核”。
 
 ## 命名规则
 - 授课计划命名：`《课程名称》授课计划`。

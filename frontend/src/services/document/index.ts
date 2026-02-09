@@ -88,10 +88,16 @@ export async function deleteDocument(documentId: number) {
 
 /** 下载文档 */
 export async function downloadDocument(documentId: number) {
-    window.open(`/api/documents/${documentId}/download`, '_blank');
+    const token = localStorage.getItem('token');
+    const url = token
+        ? `/api/documents/${documentId}/download?token=${encodeURIComponent(token)}`
+        : `/api/documents/${documentId}/download`;
+    window.open(url, '_blank');
 }
 
 /** 获取文档下载URL */
 export function getDownloadUrl(courseId: number, filename: string): string {
-    return `/api/documents/files/${courseId}/${filename}`;
+    const token = localStorage.getItem('token');
+    const base = `/api/documents/files/${courseId}/${filename}`;
+    return token ? `${base}?token=${encodeURIComponent(token)}` : base;
 }

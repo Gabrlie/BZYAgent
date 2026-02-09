@@ -6,7 +6,7 @@ import GenerationProgressDisplay, {
     GenerationProgress,
 } from '@/components/GenerationProgress';
 import { generateLessonPlanStream } from '@/services/lesson-plan';
-import { getDocumentsByType } from '@/services/document';
+import { getDocumentsByType, downloadDocument } from '@/services/document';
 
 /**
  * 教案生成页面
@@ -229,7 +229,7 @@ const LessonPlanGenerate: React.FC = () => {
                             <Button type="primary" onClick={handleViewDocument}>
                                 查看/编辑教案
                             </Button>
-                            <Button onClick={() => window.open(`/api/documents/${documentId}/download`, '_blank')}>
+                            <Button onClick={() => downloadDocument(documentId)}>
                                 下载 Word 文档
                             </Button>
                         </Space>

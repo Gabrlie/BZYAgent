@@ -28,7 +28,8 @@ async def generate_teaching_plan_stream(
     hour_per_class: int = Query(4, description="单次学时"),
     classes_per_week: int = Query(1, description="每周上课次数"),
     final_review: bool = Query(True, description="最后一次课为复习考核"),
-    skip_weeks: Optional[str] = Query(None, description="少课/跳过周次说明，如'第1周少1次'"),
+    first_week_classes: int = Query(1, description="第一周上课次数"),
+    skip_slots: Optional[str] = Query(None, description="不上课的周次与课次 JSON 数组"),
     token: str = Query(None, description="认证 Token（用于 SSE）"),
     db: Session = Depends(get_db)
 ):
@@ -37,7 +38,7 @@ async def generate_teaching_plan_stream(
     
     SSE 推送 4 个阶段：
     1. 验证课程信息 (10%)
-    2. AI 生成 schedule (70%)
+    2. 生成授课计划内容 (70%)
     3. 组装数据并渲染模板 (90%)
     4. 保存到数据库 (100%)
     """
@@ -69,18 +70,36 @@ async def generate_teaching_plan_stream(
             
             await asyncio.sleep(0.5)
             
-            # 阶段 2: AI 生成 schedule
+            # 阶段 2: 生成授课计划内容
             yield sse_event(
                 {
                     "stage": "generating",
                     "progress": 30,
-                    "message": "正在调用 AI 生成授课计划表...",
+                    "message": "正在生成授课计划内容...",
                 }
             )
             
             # 计算学时
             theory_hours = course.total_hours - course.practice_hours
             
+            skip_slots_payload = []
+            if skip_slots:
+                try:
+                    parsed = json.loads(skip_slots)
+                    if isinstance(parsed, list):
+                        skip_slots_payload = parsed
+                    else:
+                        raise ValueError("排课调整参数格式错误")
+                except Exception:
+                    yield sse_event(
+                        {
+                            "stage": "error",
+                            "progress": 0,
+                            "message": "排课调整参数格式错误，请检查不上课的周次与次数设置。",
+                        }
+                    )
+                    return
+
             schedule = await generate_teaching_plan_schedule(
                 course_catalog=course.course_catalog,
                 course_name=course.name,
@@ -94,7 +113,8 @@ async def generate_teaching_plan_stream(
                 api_key=user.ai_api_key,
                 base_url=user.ai_base_url,
                 model=user.ai_model_name or "gpt-4",
-                skip_weeks=skip_weeks
+                first_week_classes=first_week_classes,
+                skip_slots=skip_slots_payload
             )
             
             yield sse_event(

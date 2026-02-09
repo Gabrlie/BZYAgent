@@ -23,6 +23,8 @@ export async function generateTeachingPlanStream(
         hour_per_class: number;
         classes_per_week: number;
         final_review: boolean;
+        first_week_classes: number;
+        skip_slots: Array<{ week: number; class: number }>;
     },
     onProgress: (data: any) => void,
 ): Promise<void> {
@@ -32,7 +34,11 @@ export async function generateTeachingPlanStream(
         hour_per_class: String(params.hour_per_class),
         classes_per_week: String(params.classes_per_week),
         final_review: String(params.final_review),
+        first_week_classes: String(params.first_week_classes),
     });
+    if (params.skip_slots && params.skip_slots.length > 0) {
+        queryParams.append('skip_slots', JSON.stringify(params.skip_slots));
+    }
 
     // 添加 token 到 URL（EventSource 不支持自定义 headers）
     const token = localStorage.getItem('token');
