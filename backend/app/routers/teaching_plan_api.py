@@ -12,7 +12,7 @@ from ..deps import get_course_for_user, get_current_user
 from ..docx_service import render_docx_template
 from ..models import Course, CourseDocument, User
 from ..teaching_plan_service import generate_teaching_plan_schedule
-from ..utils.paths import UPLOADS_DIR
+from ..utils.documents import attach_file_exists, resolve_document_file_path
 from ..utils.sse import sse_event, sse_response
 
 
@@ -148,14 +148,15 @@ async def generate_teaching_plan_stream(
                 CourseDocument.doc_type == "plan"
             ).first()
             
+            plan_title = f"《{course.name}》授课计划"
+
             if existing_doc:
-                # 删除旧文件
-                old_file_path = UPLOADS_DIR / existing_doc.file_url.lstrip("/uploads/")
-                if old_file_path.exists():
+                old_file_path = resolve_document_file_path(existing_doc)
+                if old_file_path and old_file_path.exists():
                     old_file_path.unlink()
                 
                 # 更新记录
-                existing_doc.title = f"{course.name} - 授课计划"
+                existing_doc.title = plan_title
                 existing_doc.content = json.dumps(template_data, ensure_ascii=False)
                 existing_doc.file_url = f"/uploads/{file_path}"
                 db.commit()
@@ -166,7 +167,7 @@ async def generate_teaching_plan_stream(
                 document = CourseDocument(
                     course_id=course.id,
                     doc_type="plan",
-                    title=f"{course.name} - 授课计划",
+                    title=plan_title,
                     content=json.dumps(template_data, ensure_ascii=False),
                     file_url=f"/uploads/{file_path}",
                 )
@@ -209,7 +210,8 @@ async def get_teaching_plans(
         .order_by(CourseDocument.created_at.desc())
         .all()
     )
-    
+
+    attach_file_exists(documents)
     return {
         "documents": [
             {
@@ -217,6 +219,7 @@ async def get_teaching_plans(
                 "title": doc.title,
                 "created_at": doc.created_at,
                 "file_url": doc.file_url,
+                "file_exists": doc.file_exists,
             }
             for doc in documents
         ]

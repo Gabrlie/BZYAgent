@@ -286,6 +286,7 @@ class DocumentResponse(BaseModel):
     content: Optional[str] = None
     file_url: Optional[str] = None
     lesson_number: Optional[int] = None
+    file_exists: Optional[bool] = None
     created_at: datetime
     updated_at: datetime
     

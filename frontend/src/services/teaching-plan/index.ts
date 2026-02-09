@@ -1,5 +1,17 @@
 import { request } from '@umijs/max';
 
+const resolveSseBaseUrl = () => {
+    if (typeof window === 'undefined') {
+        return '';
+    }
+    const { protocol, hostname, port } = window.location;
+    const backendPort = '8000';
+    if ((hostname === 'localhost' || hostname === '127.0.0.1') && port !== backendPort) {
+        return `${protocol}//${hostname}:${backendPort}`;
+    }
+    return '';
+};
+
 /**
  * 生成授课计划（流式，带进度）
  */
@@ -28,7 +40,8 @@ export async function generateTeachingPlanStream(
         queryParams.append('token', token);
     }
 
-    const url = `/api/courses/${courseId}/generate-teaching-plan/stream?${queryParams}`;
+    const baseUrl = resolveSseBaseUrl();
+    const url = `${baseUrl}/api/courses/${courseId}/generate-teaching-plan/stream?${queryParams}`;
 
     const eventSource = new EventSource(url, {
         withCredentials: true,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PageContainer } from '@ant-design/pro-components';
-import { Card, Button, Form, InputNumber, message, Space, Divider, Alert, Spin } from 'antd';
-import { useParams, history } from '@umijs/max';
+import { Card, Button, Form, InputNumber, message, Space, Alert, Spin, Modal } from 'antd';
+import { useParams, history, useSearchParams } from '@umijs/max';
 import GenerationProgressDisplay, {
     GenerationProgress,
 } from '@/components/GenerationProgress';
@@ -13,6 +13,7 @@ import { getDocumentsByType } from '@/services/document';
  */
 const LessonPlanGenerate: React.FC = () => {
     const { id: courseId } = useParams<{ id: string }>();
+    const [searchParams] = useSearchParams();
     const [form] = Form.useForm();
     const [generating, setGenerating] = useState(false);
     const [progress, setProgress] = useState<GenerationProgress | null>(null);
@@ -23,6 +24,16 @@ const LessonPlanGenerate: React.FC = () => {
     useEffect(() => {
         checkTeachingPlan();
     }, [courseId]);
+
+    useEffect(() => {
+        const sequenceParam = searchParams.get('sequence');
+        if (sequenceParam) {
+            const sequenceValue = Number(sequenceParam);
+            if (!Number.isNaN(sequenceValue)) {
+                form.setFieldsValue({ sequence: sequenceValue });
+            }
+        }
+    }, [form, searchParams]);
 
     const checkTeachingPlan = async () => {
         setLoadingPlan(true);
@@ -43,6 +54,33 @@ const LessonPlanGenerate: React.FC = () => {
         }
     };
 
+    const confirmOverwrite = async (sequence: number): Promise<boolean> => {
+        try {
+            const docs = await getDocumentsByType(Number(courseId), 'lesson');
+            const existing = docs.find((doc) => doc.lesson_number === sequence);
+            if (!existing) {
+                return true;
+            }
+
+            return await new Promise((resolve) => {
+                const missingFile = existing.file_exists === false;
+                Modal.confirm({
+                    title: `第 ${sequence} 次课教案已存在`,
+                    content: missingFile
+                        ? '该教案文件不存在，将重新生成并覆盖记录，是否继续？'
+                        : '是否覆盖该教案？',
+                    okText: '覆盖',
+                    cancelText: '取消',
+                    onOk: () => resolve(true),
+                    onCancel: () => resolve(false),
+                });
+            });
+        } catch (error) {
+            message.error('检查已有教案失败');
+            return false;
+        }
+    };
+
     const handleGenerate = async () => {
         if (!teachingPlan) {
             message.error('请先创建授课计划');
@@ -51,17 +89,21 @@ const LessonPlanGenerate: React.FC = () => {
 
         try {
             const values = await form.validateFields();
+            const canProceed = await confirmOverwrite(values.sequence);
+            if (!canProceed) {
+                return;
+            }
             setGenerating(true);
-            setProgress(null);
+            setProgress({
+                stage: 'preparing',
+                progress: 0,
+                message: '正在建立连接...',
+            });
             setDocumentId(null);
-
-            // 使用授课计划的内容
-            const documents = teachingPlan.content || '';
 
             await generateLessonPlanStream(
                 Number(courseId),
                 values.sequence,
-                documents,
                 (progressData: GenerationProgress) => {
                     setProgress(progressData);
 
@@ -69,6 +111,11 @@ const LessonPlanGenerate: React.FC = () => {
                         message.success('教案生成成功！');
                         setDocumentId(progressData.document_id || null);
                         setGenerating(false);
+                        window.dispatchEvent(
+                            new CustomEvent('bzyagent:documents-refresh', {
+                                detail: { courseId: Number(courseId), docType: 'lesson' },
+                            })
+                        );
                     }
                 },
             );
@@ -135,7 +182,8 @@ const LessonPlanGenerate: React.FC = () => {
                 )}
 
                 {/* 输入表单 */}
-                {teachingPlan && (
+                {/* 输入表单 / 进度显示 */}
+                {teachingPlan && !progress && (
                     <Card title="基础信息">
                         <Form
                             form={form}
@@ -172,14 +220,7 @@ const LessonPlanGenerate: React.FC = () => {
                         </Form>
                     </Card>
                 )}
-
-                {/* 进度显示 */}
-                {progress && (
-                    <>
-                        <Divider />
-                        <GenerationProgressDisplay progress={progress} />
-                    </>
-                )}
+                {progress && <GenerationProgressDisplay progress={progress} />}
 
                 {/* 操作按钮 */}
                 {documentId && (
@@ -188,7 +229,7 @@ const LessonPlanGenerate: React.FC = () => {
                             <Button type="primary" onClick={handleViewDocument}>
                                 查看/编辑教案
                             </Button>
-                            <Button onClick={() => window.open(`/uploads/generated/lesson_plan_${courseId}_${documentId}.docx`)}>
+                            <Button onClick={() => window.open(`/api/documents/${documentId}/download`, '_blank')}>
                                 下载 Word 文档
                             </Button>
                         </Space>

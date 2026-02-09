@@ -2,7 +2,7 @@
 Word 文档模板渲染服务
 基于 docxtpl 实现 Word 文档的模板填充和生成
 """
-import time
+import hashlib
 from typing import Any, Dict
 from io import BytesIO
 from pathlib import Path
@@ -13,6 +13,19 @@ from .utils.paths import GENERATED_DIR, TEMPLATES_DIR, ensure_dir
 
 TEMPLATE_DIR = TEMPLATES_DIR
 OUTPUT_DIR = GENERATED_DIR
+
+
+def _save_docx_with_md5(doc: DocxTemplate, output_dir: Path) -> str:
+    """Save a docx to output_dir with md5 filename and return filename."""
+    file_stream = BytesIO()
+    doc.save(file_stream)
+    content = file_stream.getvalue()
+    md5_name = hashlib.md5(content).hexdigest()
+    filename = f"{md5_name}.docx"
+    output_path = output_dir / filename
+    if not output_path.exists():
+        output_path.write_bytes(content)
+    return filename
 
 
 def render_lesson_plan_docx(data: Dict[str, Any], course_id: int) -> str:
@@ -37,15 +50,9 @@ def render_lesson_plan_docx(data: Dict[str, Any], course_id: int) -> str:
     # 填充数据
     doc.render(data)
     
-    # 生成输出文件名
-    timestamp = int(time.time())
-    output_filename = f"lesson_plan_{course_id}_{timestamp}.docx"
     output_dir = ensure_dir(OUTPUT_DIR)
-    output_path = output_dir / output_filename
-    
-    # 保存文档
-    doc.save(str(output_path))
-    
+    output_filename = _save_docx_with_md5(doc, output_dir)
+
     # 返回相对路径
     return f"generated/{output_filename}"
 
@@ -73,16 +80,9 @@ def render_docx_template(template_name: str, data: Dict[str, Any], course_id: in
     # 填充数据
     doc.render(data)
     
-    # 生成输出文件名
-    timestamp = int(time.time())
-    base_name = Path(template_name).stem
-    output_filename = f"{base_name}_{course_id}_{timestamp}.docx"
     output_dir = ensure_dir(OUTPUT_DIR)
-    output_path = output_dir / output_filename
-    
-    # 保存文档
-    doc.save(str(output_path))
-    
+    output_filename = _save_docx_with_md5(doc, output_dir)
+
     # 返回相对路径
     return f"generated/{output_filename}"
 

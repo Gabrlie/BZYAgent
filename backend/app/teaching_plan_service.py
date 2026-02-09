@@ -8,7 +8,7 @@ import openai
 
 
 
-def generate_schedule_frame(
+async def generate_schedule_frame(
     total_weeks: int,
     classes_per_week: int,
     actual_classes: int,
@@ -22,7 +22,7 @@ def generate_schedule_frame(
     只负责生成周次安排 (Week Schedule)，处理复杂的周次跳过、节假日逻辑。
     返回: [{"order": 1, "week": 1}, {"order": 2, "week": 2}, ...]
     """
-    client = openai.OpenAI(api_key=api_key, base_url=base_url)
+    client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
     
     prompt = f"""# Role
 你是排课专家，负责计算每一节课所在的周次。
@@ -51,7 +51,7 @@ JSON 数组，每项包含 `order` (1..{actual_classes}) 和 `week`。
 ]
 """
     try:
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=model,
             messages=[
                 {"role": "system", "content": "你是由Python调用的排课计算引擎。只输出JSON数据。"},
@@ -133,7 +133,7 @@ async def generate_teaching_plan_schedule(
     
     # Step 1: 调用排课智能体生成周次框架
     # ---------------------------------------------------------
-    schedule_frame = generate_schedule_frame(
+    schedule_frame = await generate_schedule_frame(
         total_weeks=total_weeks,
         classes_per_week=classes_per_week,
         actual_classes=actual_classes,
@@ -201,9 +201,9 @@ JSON 数组，结构如下：
 ]
 """
     
-    client = openai.OpenAI(api_key=api_key, base_url=base_url)
+    client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
     
-    response = client.chat.completions.create(
+    response = await client.chat.completions.create(
         model=model,
         messages=[
             {"role": "system", "content": "你负责填充教学计划内容。"},

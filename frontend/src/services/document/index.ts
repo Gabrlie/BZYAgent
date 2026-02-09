@@ -11,6 +11,7 @@ export interface CourseDocument {
     content?: string;
     file_url?: string;
     lesson_number?: number;
+    file_exists?: boolean;
     created_at: string;
     updated_at: string;
 }
@@ -87,13 +88,7 @@ export async function deleteDocument(documentId: number) {
 
 /** 下载文档 */
 export async function downloadDocument(documentId: number) {
-    // 获取文档详情以获取下载URL
-    const doc = await getDocumentDetail(documentId);
-    if (doc.file_url) {
-        window.open(doc.file_url, '_blank');
-    } else {
-        throw new Error('该文档没有文件可供下载');
-    }
+    window.open(`/api/documents/${documentId}/download`, '_blank');
 }
 
 /** 获取文档下载URL */

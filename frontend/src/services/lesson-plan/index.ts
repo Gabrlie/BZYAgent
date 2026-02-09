@@ -1,15 +1,34 @@
 import { request } from '@umijs/max';
 
+const resolveSseBaseUrl = () => {
+    if (typeof window === 'undefined') {
+        return '';
+    }
+    const { protocol, hostname, port } = window.location;
+    const backendPort = '8000';
+    if ((hostname === 'localhost' || hostname === '127.0.0.1') && port !== backendPort) {
+        return `${protocol}//${hostname}:${backendPort}`;
+    }
+    return '';
+};
+
 /**
  * 生成教案（流式，带进度）
  */
 export async function generateLessonPlanStream(
     courseId: number,
     sequence: number,
-    documents: string,
     onProgress: (data: any) => void,
 ): Promise<void> {
-    const url = `/api/courses/${courseId}/generate-lesson-plan/stream?sequence=${sequence}&documents=${encodeURIComponent(documents)}`;
+    const token = localStorage.getItem('token');
+    const queryParams = new URLSearchParams({
+        sequence: String(sequence),
+    });
+    if (token) {
+        queryParams.append('token', token);
+    }
+    const baseUrl = resolveSseBaseUrl();
+    const url = `${baseUrl}/api/courses/${courseId}/generate-lesson-plan/stream?${queryParams}`;
 
     // 使用 EventSource 接收 SSE
     const eventSource = new EventSource(url, {

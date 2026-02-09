@@ -33,6 +33,7 @@ export interface CourseDocument {
     content?: string;
     file_url?: string;
     lesson_number?: number;
+    file_exists?: boolean;
     created_at: string;
     updated_at: string;
 }

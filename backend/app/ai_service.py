@@ -198,9 +198,9 @@ async def generate_lesson_plan_content(
 请直接返回 JSON，不要包含任何额外的文字说明。
 """
     
-    client = openai.OpenAI(api_key=api_key, base_url=base_url)
+    client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
     
-    response = client.chat.completions.create(
+    response = await client.chat.completions.create(
         model=model,
         messages=[
             {"role": "system", "content": "你是一位广东碧桂园职业学院的资深专业课教师，擅长进行课程设计和教案编写。"},

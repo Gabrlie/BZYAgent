@@ -3,7 +3,7 @@
 """
 import asyncio
 import json
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import AsyncGenerator
 
@@ -12,16 +12,16 @@ from ..deps import get_course_for_user, get_current_user
 from ..docx_service import render_lesson_plan_docx
 from ..knowledge_service import retrieve_course_context, build_ai_context_prompt
 from ..models import Course, CourseDocument, User
+from ..utils.documents import attach_file_exists, resolve_document_file_path
 from ..utils.sse import sse_event, sse_response
 
 
 router = APIRouter(prefix="/api/courses", tags=["教案生成"])
 
 
-@router.post("/{course_id}/generate-lesson-plan/stream")
+@router.api_route("/{course_id}/generate-lesson-plan/stream", methods=["GET", "POST"])
 async def generate_lesson_plan_stream(
-    sequence: int,
-    documents: str,
+    sequence: int = Query(..., description="授课顺序"),
     course: Course = Depends(get_course_for_user),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -41,6 +41,38 @@ async def generate_lesson_plan_stream(
     # 检查 AI 配置
     if not user.ai_api_key or not user.ai_base_url:
         raise HTTPException(status_code=400, detail="请先配置 AI API")
+
+    # 获取授课计划文档（教案生成所需的核心输入）
+    plan_docs = (
+        db.query(CourseDocument)
+        .filter(CourseDocument.course_id == course.id, CourseDocument.doc_type == "plan")
+        .order_by(CourseDocument.created_at.desc())
+        .all()
+    )
+
+    if not plan_docs:
+        raise HTTPException(status_code=400, detail="请先创建授课计划")
+
+    documents_text = "\n\n".join([doc.content or "" for doc in plan_docs]).strip()
+
+    def resolve_week_number() -> int:
+        for doc in plan_docs:
+            if not doc.content:
+                continue
+            try:
+                data = json.loads(doc.content)
+            except Exception:
+                continue
+            schedule = data.get("schedule") if isinstance(data, dict) else None
+            if not schedule:
+                continue
+            for item in schedule:
+                if isinstance(item, dict) and item.get("order") == sequence:
+                    try:
+                        return int(item.get("week"))
+                    except Exception:
+                        return sequence
+        return sequence
     
     async def event_generator() -> AsyncGenerator[str, None]:
         try:
@@ -78,7 +110,7 @@ async def generate_lesson_plan_stream(
             
             lesson_plan_data = await generate_lesson_plan_content(
                 sequence=sequence,
-                documents=documents,
+                documents=documents_text,
                 course_context=context_prompt,
                 api_key=user.ai_api_key,
                 base_url=user.ai_base_url,
@@ -105,19 +137,46 @@ async def generate_lesson_plan_stream(
             # 渲染 Word 文档
             file_path = render_lesson_plan_docx(lesson_plan_data, course.id)
             
-            # 保存到数据库
-            document = CourseDocument(
-                course_id=course.id,
-                doc_type="lesson_plan",
-                title=f"教案 - 第{sequence}次课",
-                content=json.dumps(lesson_plan_data, ensure_ascii=False),
-                file_url=f"/uploads/{file_path}",
-                lesson_number=sequence,
+            week_number = resolve_week_number()
+            title = f"{sequence + 1}广东碧桂园职业学院教案（主页）-第{week_number}周教案"
+
+            # 保存到数据库（同课次存在则覆盖）
+            existing_doc = (
+                db.query(CourseDocument)
+                .filter(
+                    CourseDocument.course_id == course.id,
+                    CourseDocument.doc_type.in_(["lesson", "lesson_plan"]),
+                    CourseDocument.lesson_number == sequence,
+                )
+                .first()
             )
-            
-            db.add(document)
-            db.commit()
-            db.refresh(document)
+
+            if existing_doc:
+                old_file_path = resolve_document_file_path(existing_doc)
+                if old_file_path and old_file_path.exists():
+                    old_file_path.unlink()
+
+                existing_doc.doc_type = "lesson"
+                existing_doc.title = title
+                existing_doc.content = json.dumps(lesson_plan_data, ensure_ascii=False)
+                existing_doc.file_url = f"/uploads/{file_path}"
+                existing_doc.lesson_number = sequence
+                db.commit()
+                db.refresh(existing_doc)
+                document = existing_doc
+            else:
+                document = CourseDocument(
+                    course_id=course.id,
+                    doc_type="lesson",
+                    title=title,
+                    content=json.dumps(lesson_plan_data, ensure_ascii=False),
+                    file_url=f"/uploads/{file_path}",
+                    lesson_number=sequence,
+                )
+
+                db.add(document)
+                db.commit()
+                db.refresh(document)
             
             # 完成
             yield sse_event(
@@ -148,12 +207,13 @@ async def get_lesson_plans(
         db.query(CourseDocument)
         .filter(
             CourseDocument.course_id == course.id,
-            CourseDocument.doc_type == "lesson_plan",
+            CourseDocument.doc_type.in_(["lesson", "lesson_plan"]),
         )
         .order_by(CourseDocument.lesson_number)
         .all()
     )
-    
+    attach_file_exists(documents)
+
     return {
         "documents": [
             {
@@ -162,6 +222,7 @@ async def get_lesson_plans(
                 "lesson_number": doc.lesson_number,
                 "created_at": doc.created_at,
                 "file_url": doc.file_url,
+                "file_exists": doc.file_exists,
             }
             for doc in documents
         ]

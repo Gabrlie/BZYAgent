@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Card, Progress, Steps, Alert, Space } from 'antd';
 import {
     LoadingOutlined,
@@ -9,7 +9,16 @@ import {
 const { Step } = Steps;
 
 export interface GenerationProgress {
-    stage: 'analyzing' | 'retrieving' | 'generating' | 'rendering' | 'completed' | 'error';
+    stage:
+        | 'preparing'
+        | 'analyzing'
+        | 'retrieving'
+        | 'validating'
+        | 'generating'
+        | 'rendering'
+        | 'saving'
+        | 'completed'
+        | 'error';
     progress: number;
     message: string;
     document_id?: number;
@@ -21,13 +30,23 @@ interface ProgressDisplayProps {
     progress: GenerationProgress | null;
 }
 
-const stageConfig = {
-    analyzing: { title: '解析需求', index: 0 },
-    retrieving: { title: '检索知识库', index: 1 },
-    generating: { title: 'AI 生成内容', index: 2 },
-    rendering: { title: '填充模板', index: 3 },
-    completed: { title: '完成', index: 4 },
-    error: { title: '错误', index: 4 },
+const phaseSteps = [
+    { key: 'preparing', title: '数据准备' },
+    { key: 'generating', title: '内容生成' },
+    { key: 'rendering', title: '格式化处理' },
+    { key: 'completed', title: '生成完成' },
+] as const;
+
+const stageToPhase: Record<string, (typeof phaseSteps)[number]['key']> = {
+    preparing: 'preparing',
+    analyzing: 'preparing',
+    retrieving: 'preparing',
+    validating: 'preparing',
+    generating: 'generating',
+    rendering: 'rendering',
+    saving: 'rendering',
+    completed: 'completed',
+    error: 'completed',
 };
 
 /**
@@ -38,7 +57,11 @@ const GenerationProgressDisplay: React.FC<ProgressDisplayProps> = ({ progress })
         return null;
     }
 
-    const currentStage = stageConfig[progress.stage];
+    const currentPhaseKey = stageToPhase[progress.stage] || 'preparing';
+    const currentStageIndex = Math.max(
+        0,
+        phaseSteps.findIndex((step) => step.key === currentPhaseKey)
+    );
     const isError = progress.stage === 'error';
     const isCompleted = progress.stage === 'completed';
 
@@ -59,59 +82,21 @@ const GenerationProgressDisplay: React.FC<ProgressDisplayProps> = ({ progress })
 
                 {/* 步骤指示 */}
                 <Steps
-                    current={currentStage.index}
+                    current={currentStageIndex}
                     status={isError ? 'error' : isCompleted ? 'finish' : 'process'}
                 >
-                    <Step
-                        title="解析需求"
-                        icon={
-                            currentStage.index > 0 ? (
-                                <CheckCircleOutlined />
-                            ) : currentStage.index === 0 ? (
-                                <LoadingOutlined />
-                            ) : null
+                    {phaseSteps.map((step, index) => {
+                        let icon = null;
+                        if (isError && index === currentStageIndex) {
+                            icon = <CloseCircleOutlined />;
+                        } else if (isCompleted || index < currentStageIndex) {
+                            icon = <CheckCircleOutlined />;
+                        } else if (index === currentStageIndex) {
+                            icon = <LoadingOutlined />;
                         }
-                    />
-                    <Step
-                        title="检索知识库"
-                        icon={
-                            currentStage.index > 1 ? (
-                                <CheckCircleOutlined />
-                            ) : currentStage.index === 1 ? (
-                                <LoadingOutlined />
-                            ) : null
-                        }
-                    />
-                    <Step
-                        title="AI 生成"
-                        icon={
-                            currentStage.index > 2 ? (
-                                <CheckCircleOutlined />
-                            ) : currentStage.index === 2 ? (
-                                <LoadingOutlined />
-                            ) : null
-                        }
-                    />
-                    <Step
-                        title="填充模板"
-                        icon={
-                            currentStage.index > 3 ? (
-                                <CheckCircleOutlined />
-                            ) : currentStage.index === 3 ? (
-                                <LoadingOutlined />
-                            ) : null
-                        }
-                    />
-                    <Step
-                        title={isError ? '失败' : '完成'}
-                        icon={
-                            isCompleted ? (
-                                <CheckCircleOutlined />
-                            ) : isError ? (
-                                <CloseCircleOutlined />
-                            ) : null
-                        }
-                    />
+
+                        return <Step key={step.key} title={step.title} icon={icon} />;
+                    })}
                 </Steps>
 
                 {/* 当前状态消息 */}

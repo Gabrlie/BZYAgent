@@ -16,6 +16,7 @@ from ..models import (
     User,
     calculate_semester,
 )
+from ..utils.documents import attach_file_exists
 
 
 router = APIRouter(prefix="/api/courses", tags=["课程管理"])
@@ -93,7 +94,7 @@ async def get_course(
         .all()
     )
 
-    return {"course": course, "documents": documents}
+    return {"course": course, "documents": attach_file_exists(documents)}
 
 
 @router.put("/{course_id}", response_model=CourseResponse)

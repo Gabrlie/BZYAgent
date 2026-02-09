@@ -1,6 +1,6 @@
 import { PageContainer, ProCard, ProDescriptions } from '@ant-design/pro-components';
-import { Button, Image, message, Modal, Tabs, Empty, Input } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Button, Image, message, Modal, Tabs, Input, Space, Dropdown, Checkbox, Popover } from 'antd';
+import { EditOutlined, DeleteOutlined, ReloadOutlined, SettingOutlined, ColumnHeightOutlined } from '@ant-design/icons';
 import { useNavigate, useParams, useIntl } from '@umijs/max';
 import { useEffect, useMemo, useState } from 'react';
 import { getCourseDetail, deleteCourse, updateCourse, type Course } from '@/services/course';
@@ -18,6 +18,22 @@ const CourseDetail: React.FC = () => {
     const [catalogModalOpen, setCatalogModalOpen] = useState(false);
     const [editingCatalog, setEditingCatalog] = useState('');
     const [activeTab, setActiveTab] = useState('single');
+    const [tableSize, setTableSize] = useState<'large' | 'middle' | 'small'>('middle');
+    const [refreshTick, setRefreshTick] = useState({ lesson: 0, courseware: 0 });
+    const [visibleColumns, setVisibleColumns] = useState({
+        lesson: {
+            lesson_number: true,
+            title: true,
+            created_at: true,
+            actions: true,
+        },
+        courseware: {
+            lesson_number: true,
+            title: true,
+            created_at: true,
+            actions: true,
+        },
+    });
 
     useEffect(() => {
         loadCourseDetail();
@@ -74,26 +90,108 @@ const CourseDetail: React.FC = () => {
         }
     };
 
+    const densityMenu = useMemo(
+        () => ({
+            items: [
+                { key: 'large', label: '宽松' },
+                { key: 'middle', label: '默认' },
+                { key: 'small', label: '紧凑' },
+            ],
+            onClick: ({ key }: { key: 'large' | 'middle' | 'small' }) => {
+                setTableSize(key);
+            },
+        }),
+        [],
+    );
+
+    const columnOptions = useMemo(
+        () => [
+            { label: intl.formatMessage({ id: 'pages.courses.documents.lessonNumber' }), value: 'lesson_number' },
+            { label: intl.formatMessage({ id: 'pages.courses.documents.title' }), value: 'title' },
+            { label: intl.formatMessage({ id: 'pages.courses.documents.createdAt' }), value: 'created_at' },
+            { label: intl.formatMessage({ id: 'pages.courses.documents.actions' }), value: 'actions' },
+        ],
+        [intl],
+    );
+
     const tabExtra = useMemo(() => {
-        if (activeTab === 'lesson') {
-            return (
+        if (activeTab !== 'lesson' && activeTab !== 'courseware') {
+            return null;
+        }
+
+        const isLesson = activeTab === 'lesson';
+        const currentVisible = visibleColumns[activeTab as 'lesson' | 'courseware'];
+        const checkedValues = columnOptions
+            .filter((option) => currentVisible[option.value])
+            .map((option) => option.value);
+
+        return (
+            <Space>
                 <Button
                     type="primary"
-                    onClick={() => navigate(`/courses/${params.id}/lesson-plan/generate`)}
+                    onClick={() =>
+                        isLesson
+                            ? navigate(`/courses/${params.id}/lesson-plan/generate`)
+                            : message.info('新建功能开发中')
+                    }
                 >
-                    新建教案
+                    {isLesson ? '新建教案' : '新建课件'}
                 </Button>
-            );
-        }
-        if (activeTab === 'courseware') {
-            return (
-                <Button type="primary" onClick={() => message.info('新建功能开发中')}>
-                    新建课件
-                </Button>
-            );
-        }
-        return null;
-    }, [activeTab, navigate, params.id]);
+                {(isLesson || activeTab === 'courseware') && (
+                    <Button
+                        onClick={() =>
+                            window.dispatchEvent(
+                                new CustomEvent('bzyagent:documents-upload', {
+                                    detail: {
+                                        courseId: Number(params.id),
+                                        docType: isLesson ? 'lesson' : 'courseware',
+                                    },
+                                }),
+                            )
+                        }
+                    >
+                        {isLesson ? '上传教案' : '上传课件'}
+                    </Button>
+                )}
+                <Button
+                    icon={<ReloadOutlined />}
+                    onClick={() =>
+                        setRefreshTick((prev) => ({
+                            ...prev,
+                            [activeTab]: prev[activeTab as 'lesson' | 'courseware'] + 1,
+                        }))
+                    }
+                />
+                <Dropdown menu={densityMenu} placement="bottomRight">
+                    <Button icon={<ColumnHeightOutlined />} />
+                </Dropdown>
+                <Popover
+                    placement="bottomRight"
+                    trigger="click"
+                    content={
+                        <Checkbox.Group
+                            value={checkedValues}
+                            options={columnOptions}
+                            onChange={(values) => {
+                                setVisibleColumns((prev) => ({
+                                    ...prev,
+                                    [activeTab]: columnOptions.reduce<Record<string, boolean>>(
+                                        (acc, option) => {
+                                            acc[option.value] = values.includes(option.value);
+                                            return acc;
+                                        },
+                                        {},
+                                    ),
+                                }));
+                            }}
+                        />
+                    }
+                >
+                    <Button icon={<SettingOutlined />} />
+                </Popover>
+            </Space>
+        );
+    }, [activeTab, columnOptions, densityMenu, message, navigate, params.id, visibleColumns]);
 
     if (!course) {
         return <PageContainer loading={loading} />;
@@ -235,12 +333,28 @@ const CourseDetail: React.FC = () => {
                         {
                             key: 'lesson',
                             label: intl.formatMessage({ id: 'pages.courses.documents.lesson' }),
-                            children: <MultiDocuments courseId={Number(params.id)} docType="lesson" />,
+                            children: (
+                                <MultiDocuments
+                                    courseId={Number(params.id)}
+                                    docType="lesson"
+                                    refreshKey={refreshTick.lesson}
+                                    size={tableSize}
+                                    visibleColumns={visibleColumns.lesson}
+                                />
+                            ),
                         },
                         {
                             key: 'courseware',
                             label: intl.formatMessage({ id: 'pages.courses.documents.courseware' }),
-                            children: <MultiDocuments courseId={Number(params.id)} docType="courseware" />,
+                            children: (
+                                <MultiDocuments
+                                    courseId={Number(params.id)}
+                                    docType="courseware"
+                                    refreshKey={refreshTick.courseware}
+                                    size={tableSize}
+                                    visibleColumns={visibleColumns.courseware}
+                                />
+                            ),
                         },
                     ]}
                 />

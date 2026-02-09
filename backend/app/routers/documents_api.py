@@ -1,8 +1,8 @@
 """
 文档管理 API
 """
-import shutil
-import uuid
+import hashlib
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..deps import get_course_for_user, get_document_for_user
 from ..utils.paths import UPLOADS_DIR, course_documents_dir, ensure_dir
+from ..utils.documents import attach_file_exists, resolve_document_file_path
 from ..models import (
     Course,
     CourseDocument,
@@ -23,6 +24,7 @@ from ..models import (
 
 
 router = APIRouter(prefix="/api", tags=["文档管理"])
+
 
 
 @router.post("/courses/{course_id}/documents", response_model=DocumentResponse)
@@ -77,14 +79,19 @@ async def upload_document(
     if file_size > 10 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="文件大小不能超过 10MB")
 
+    if doc_type == "lesson" and lesson_number is None:
+        raise HTTPException(status_code=400, detail="教案上传必须指定课次")
+
     if doc_type == "plan":
         upload_dir = UPLOADS_DIR / "generated"
-        filename = f"授课计划模板_{course.id}_uploaded{file_ext}"
     else:
         upload_dir = course_documents_dir(course.id)
-        filename = f"{uuid.uuid4()}{file_ext}"
 
     ensure_dir(upload_dir)
+
+    content = file.file.read()
+    file_md5 = hashlib.md5(content).hexdigest()
+    filename = f"{file_md5}{file_ext}"
     file_path = Path(upload_dir) / filename
 
     existing_doc = None
@@ -94,22 +101,56 @@ async def upload_document(
             .filter(CourseDocument.course_id == course.id, CourseDocument.doc_type == "plan")
             .first()
         )
+    elif doc_type == "lesson":
+        existing_doc = (
+            db.query(CourseDocument)
+            .filter(
+                CourseDocument.course_id == course.id,
+                CourseDocument.doc_type.in_(["lesson", "lesson_plan"]),
+                CourseDocument.lesson_number == lesson_number,
+            )
+            .first()
+        )
 
-        if existing_doc and existing_doc.file_url:
-            old_file_path = UPLOADS_DIR / existing_doc.file_url.lstrip("/uploads/")
-            if old_file_path.exists():
-                old_file_path.unlink()
+    if existing_doc:
+        old_file_path = resolve_document_file_path(existing_doc)
+        if old_file_path and old_file_path.exists():
+            old_file_path.unlink()
 
     with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        buffer.write(content)
 
     if doc_type == "plan":
         file_url = f"/uploads/generated/{filename}"
     else:
         file_url = f"/api/documents/files/{course.id}/{filename}"
 
+    if doc_type == "plan":
+        title = f"《{course.name}》授课计划"
+    elif doc_type == "lesson":
+        plan_doc = (
+            db.query(CourseDocument)
+            .filter(CourseDocument.course_id == course.id, CourseDocument.doc_type == "plan")
+            .order_by(CourseDocument.created_at.desc())
+            .first()
+        )
+        week_number = lesson_number
+        if plan_doc and plan_doc.content:
+            try:
+                plan_data = json.loads(plan_doc.content)
+                schedule = plan_data.get("schedule") if isinstance(plan_data, dict) else None
+                if schedule:
+                    for item in schedule:
+                        if isinstance(item, dict) and item.get("order") == lesson_number:
+                            week_number = int(item.get("week"))
+                            break
+            except Exception:
+                week_number = lesson_number
+        title = f"{lesson_number + 1}广东碧桂园职业学院教案（主页）-第{week_number}周教案"
+
     try:
         if existing_doc:
+            existing_doc.doc_type = "lesson" if doc_type == "lesson" else doc_type
             existing_doc.title = title
             existing_doc.file_url = file_url
             if lesson_number is not None:
@@ -150,7 +191,7 @@ async def get_documents(
         .all()
     )
 
-    return documents
+    return attach_file_exists(documents)
 
 
 @router.get("/courses/{course_id}/documents/type/{doc_type}", response_model=list[DocumentResponse])
@@ -160,14 +201,18 @@ async def get_documents_by_type(
     db: Session = Depends(get_db),
 ):
     """获取指定类型的文档列表"""
+    query = db.query(CourseDocument).filter(CourseDocument.course_id == course.id)
+    if doc_type == "lesson":
+        query = query.filter(CourseDocument.doc_type.in_(["lesson", "lesson_plan"]))
+    else:
+        query = query.filter(CourseDocument.doc_type == doc_type)
+
     documents = (
-        db.query(CourseDocument)
-        .filter(CourseDocument.course_id == course.id, CourseDocument.doc_type == doc_type)
-        .order_by(CourseDocument.lesson_number)
+        query.order_by(CourseDocument.lesson_number)
         .all()
     )
 
-    return documents
+    return attach_file_exists(documents)
 
 
 @router.get("/documents/{document_id}", response_model=DocumentResponse)
@@ -175,7 +220,30 @@ async def get_document(
     document: CourseDocument = Depends(get_document_for_user),
 ):
     """获取单个文档详情"""
+    attach_file_exists([document])
     return document
+
+
+@router.get("/documents/{document_id}/download")
+async def download_document_by_id(
+    document: CourseDocument = Depends(get_document_for_user),
+):
+    """下载文档文件（带正确文件名）"""
+    file_path = resolve_document_file_path(document)
+    if not file_path or not file_path.exists():
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    filename = document.title or file_path.name
+    filename = filename.replace("/", "_").replace("\\", "_")
+    ext = file_path.suffix
+    if ext and not filename.endswith(ext):
+        filename = f"{filename}{ext}"
+
+    return FileResponse(
+        str(file_path),
+        media_type="application/octet-stream",
+        filename=filename,
+    )
 
 
 @router.put("/documents/{document_id}", response_model=DocumentResponse)
@@ -201,15 +269,11 @@ async def delete_document(
     db: Session = Depends(get_db),
 ):
     """删除文档 - 同时删除上传的文件"""
-    if document.file_url:
+    file_path = resolve_document_file_path(document)
+    if file_path:
         try:
-            parts = document.file_url.split("/")
-            if len(parts) >= 3:
-                course_id = parts[-2]
-                filename = parts[-1]
-                file_path = course_documents_dir(course_id) / filename
-                if file_path.exists():
-                    file_path.unlink()
+            if file_path.exists():
+                file_path.unlink()
         except Exception as e:
             print(f"删除文件失败：{e}")
 
