@@ -7,6 +7,7 @@ import GenerationProgressDisplay, {
 } from '@/components/GenerationProgress';
 import { generateLessonPlanStream } from '@/services/lesson-plan';
 import { getDocumentsByType, downloadDocument } from '@/services/document';
+import { getCourseDetail } from '@/services/course';
 
 /**
  * 教案生成页面
@@ -20,8 +21,11 @@ const LessonPlanGenerate: React.FC = () => {
     const [documentId, setDocumentId] = useState<number | null>(null);
     const [loadingPlan, setLoadingPlan] = useState(true);
     const [teachingPlan, setTeachingPlan] = useState<any>(null);
+    const [loadingCourse, setLoadingCourse] = useState(true);
+    const [course, setCourse] = useState<any>(null);
 
     useEffect(() => {
+        loadCourse();
         checkTeachingPlan();
     }, [courseId]);
 
@@ -81,7 +85,24 @@ const LessonPlanGenerate: React.FC = () => {
         }
     };
 
+    const loadCourse = async () => {
+        setLoadingCourse(true);
+        try {
+            const data = await getCourseDetail(Number(courseId));
+            setCourse(data.course);
+        } catch (error) {
+            message.error('加载课程信息失败');
+            setCourse(null);
+        } finally {
+            setLoadingCourse(false);
+        }
+    };
+
     const handleGenerate = async () => {
+        if (course?.course_type === 'C') {
+            message.error('C类课程教案暂未开发，请自行上传教案');
+            return;
+        }
         if (!teachingPlan) {
             message.error('请先创建授课计划');
             return;
@@ -132,7 +153,7 @@ const LessonPlanGenerate: React.FC = () => {
         }
     };
 
-    if (loadingPlan) {
+    if (loadingPlan || loadingCourse) {
         return (
             <PageContainer title="生成教案">
                 <Card>
@@ -154,6 +175,25 @@ const LessonPlanGenerate: React.FC = () => {
         >
             <Space direction="vertical" style={{ width: '100%' }} size="large">
                 {/* 授课计划状态检查 */}
+                {course?.course_type === 'C' && (
+                    <Alert
+                        message="暂未支持 C 类课程教案生成"
+                        description={
+                            <div>
+                                <p>C类课程教案暂未开发，请自行上传教案。</p>
+                                <Button
+                                    type="primary"
+                                    onClick={() => history.push(`/courses/${courseId}`)}
+                                    style={{ marginTop: 8 }}
+                                >
+                                    返回课程页面上传教案
+                                </Button>
+                            </div>
+                        }
+                        type="warning"
+                        showIcon
+                    />
+                )}
                 {!teachingPlan ? (
                     <Alert
                         message="缺少授课计划"
@@ -183,7 +223,7 @@ const LessonPlanGenerate: React.FC = () => {
 
                 {/* 输入表单 */}
                 {/* 输入表单 / 进度显示 */}
-                {teachingPlan && !progress && (
+                {teachingPlan && !progress && course?.course_type !== 'C' && (
                     <Card title="基础信息">
                         <Form
                             form={form}

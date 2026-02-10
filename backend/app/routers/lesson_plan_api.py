@@ -13,10 +13,51 @@ from ..docx_service import render_lesson_plan_docx
 from ..knowledge_service import retrieve_course_context, build_ai_context_prompt
 from ..models import Course, CourseDocument, User
 from ..utils.documents import attach_file_exists, resolve_document_file_path
+from ..utils.plan_params import (
+    parse_plan_params_json,
+    build_plan_params_from_content,
+    get_plan_item,
+    compute_cumulative_hours,
+    extract_text_from_docx,
+    extract_text_from_plain_bytes,
+)
 from ..utils.sse import sse_event, sse_response
+from ..ai_service import (
+    generate_lesson_plan_content,
+    parse_teaching_plan_params,
+    regenerate_time_allocation,
+    validate_time_allocation,
+)
 
 
 router = APIRouter(prefix="/api/courses", tags=["教案生成"])
+
+
+LIST_TEXT_FIELDS = {
+    "knowledge_goals",
+    "ability_goals",
+    "quality_goals",
+    "teaching_focus",
+    "teaching_difficulty",
+    "review_content",
+    "summary_content",
+    "homework_content",
+}
+
+
+def _normalize_list_text(value: str) -> str:
+    if not isinstance(value, str):
+        return value
+    lines = [line.rstrip() for line in value.splitlines() if line.strip()]
+    if not lines:
+        return value
+    return "\n".join(lines) + "\n"
+
+
+def _apply_list_newlines(data: dict) -> None:
+    for key in LIST_TEXT_FIELDS:
+        if key in data:
+            data[key] = _normalize_list_text(data[key])
 
 
 @router.api_route("/{course_id}/generate-lesson-plan/stream", methods=["GET", "POST"])
@@ -36,11 +77,11 @@ async def generate_lesson_plan_stream(
     4. 填充模板 (90%)
     5. 完成 (100%)
     """
-    from ..ai_service import generate_lesson_plan_content
-    
     # 检查 AI 配置
     if not user.ai_api_key or not user.ai_base_url:
         raise HTTPException(status_code=400, detail="请先配置 AI API")
+    if course.course_type == "C":
+        raise HTTPException(status_code=400, detail="C类课程教案暂未开发，请自行上传教案")
 
     # 获取授课计划文档（教案生成所需的核心输入）
     plan_docs = (
@@ -53,26 +94,55 @@ async def generate_lesson_plan_stream(
     if not plan_docs:
         raise HTTPException(status_code=400, detail="请先创建授课计划")
 
-    documents_text = "\n\n".join([doc.content or "" for doc in plan_docs]).strip()
+    plan_doc = plan_docs[0]
 
-    def resolve_week_number() -> int:
-        for doc in plan_docs:
-            if not doc.content:
-                continue
+    async def resolve_plan_params() -> dict:
+        if plan_doc.plan_params:
+            parsed = parse_plan_params_json(plan_doc.plan_params)
+            if parsed and parsed.get("schedule"):
+                return parsed
+
+        if plan_doc.content:
             try:
-                data = json.loads(doc.content)
+                content_data = json.loads(plan_doc.content)
             except Exception:
-                continue
-            schedule = data.get("schedule") if isinstance(data, dict) else None
-            if not schedule:
-                continue
-            for item in schedule:
-                if isinstance(item, dict) and item.get("order") == sequence:
-                    try:
-                        return int(item.get("week"))
-                    except Exception:
-                        return sequence
-        return sequence
+                content_data = None
+            if isinstance(content_data, dict):
+                params = build_plan_params_from_content(content_data)
+                if params and params.get("schedule"):
+                    plan_doc.plan_params = json.dumps(params, ensure_ascii=False)
+                    db.commit()
+                    return params
+
+        file_path = resolve_document_file_path(plan_doc)
+        if not file_path or not file_path.exists():
+            raise ValueError("授课计划文件不存在，无法解析参数")
+
+        file_ext = file_path.suffix.lower()
+        if file_ext not in [".docx", ".md"]:
+            raise ValueError("授课计划解析仅支持 .docx 或 .md 文件")
+
+        if file_ext == ".docx":
+            extracted_text = extract_text_from_docx(file_path)
+        else:
+            extracted_text = extract_text_from_plain_bytes(file_path.read_bytes())
+
+        if not extracted_text.strip():
+            raise ValueError("授课计划解析失败：文档内容为空")
+
+        params = await parse_teaching_plan_params(
+            extracted_text=extracted_text,
+            course_total_hours=course.total_hours,
+            api_key=user.ai_api_key,
+            base_url=user.ai_base_url,
+            model=user.ai_model_name or "gpt-4",
+        )
+        if not params or not params.get("schedule"):
+            raise ValueError("授课计划解析失败：未提取到课次列表")
+
+        plan_doc.plan_params = json.dumps(params, ensure_ascii=False)
+        db.commit()
+        return params
     
     async def event_generator() -> AsyncGenerator[str, None]:
         try:
@@ -86,7 +156,52 @@ async def generate_lesson_plan_stream(
             )
             await asyncio.sleep(0.5)
             
-            # 阶段 2: 检索知识库
+            # 阶段 2: 解析授课计划参数
+            yield sse_event(
+                {
+                    "stage": "parsing",
+                    "progress": 20,
+                    "message": "正在解析授课计划参数...",
+                }
+            )
+
+            plan_params = await resolve_plan_params()
+            schedule = plan_params.get("schedule") if isinstance(plan_params, dict) else None
+            if not isinstance(schedule, list) or not schedule:
+                raise ValueError("授课计划参数缺失，请重新生成或上传授课计划")
+
+            plan_item = get_plan_item(schedule, sequence)
+            if not plan_item:
+                raise ValueError("授课顺序不在授课计划范围内")
+
+            hour_per_class = plan_params.get("hour_per_class")
+            if not isinstance(hour_per_class, int) or hour_per_class <= 0:
+                hour_per_class = plan_item.get("hour") if isinstance(plan_item.get("hour"), int) else None
+
+            if not isinstance(hour_per_class, int) or hour_per_class <= 0:
+                raise ValueError("授课计划缺少单次学时信息")
+
+            hours = plan_item.get("hour") if isinstance(plan_item.get("hour"), int) else hour_per_class
+            week_number = plan_item.get("week") if isinstance(plan_item.get("week"), int) else sequence
+            cumulative_hours = compute_cumulative_hours(schedule, sequence, default_hour=hour_per_class)
+
+            system_fields = {
+                "project_name": plan_item.get("title") or plan_item.get("project_name") or f"第{sequence}次课",
+                "week": week_number,
+                "sequence": sequence,
+                "hours": hours,
+                "total_hours": cumulative_hours,
+            }
+
+            plan_item_payload = {
+                "week": week_number,
+                "order": sequence,
+                "title": plan_item.get("title") or "",
+                "tasks": plan_item.get("tasks") or "",
+                "hour": hours,
+            }
+
+            # 阶段 3: 检索知识库
             yield sse_event(
                 {
                     "stage": "retrieving",
@@ -96,10 +211,14 @@ async def generate_lesson_plan_stream(
             )
             
             context = retrieve_course_context(db, course.id)
+            if context.get("documents"):
+                context["documents"] = [
+                    doc for doc in context["documents"] if doc.get("type") != "plan"
+                ]
             context_prompt = build_ai_context_prompt(context)
             await asyncio.sleep(0.5)
             
-            # 阶段 3: AI 生成内容
+            # 阶段 4: AI 生成内容
             yield sse_event(
                 {
                     "stage": "generating",
@@ -110,12 +229,51 @@ async def generate_lesson_plan_stream(
             
             lesson_plan_data = await generate_lesson_plan_content(
                 sequence=sequence,
-                documents=documents_text,
+                plan_item=plan_item_payload,
+                system_fields=system_fields,
                 course_context=context_prompt,
                 api_key=user.ai_api_key,
                 base_url=user.ai_base_url,
                 model=user.ai_model_name or "gpt-4"
             )
+
+            # 覆盖系统字段
+            lesson_plan_data["project_name"] = system_fields["project_name"]
+            lesson_plan_data["week"] = system_fields["week"]
+            lesson_plan_data["sequence"] = system_fields["sequence"]
+            lesson_plan_data["hours"] = system_fields["hours"]
+            lesson_plan_data["total_hours"] = system_fields["total_hours"]
+
+            # 列表字段统一换行
+            _apply_list_newlines(lesson_plan_data)
+
+            # 时间分配校验
+            ok, reason = validate_time_allocation(lesson_plan_data, system_fields["hours"])
+            if not ok:
+                for _ in range(2):
+                    allocation = await regenerate_time_allocation(
+                        lesson_plan_data=lesson_plan_data,
+                        hours=system_fields["hours"],
+                        api_key=user.ai_api_key,
+                        base_url=user.ai_base_url,
+                        model=user.ai_model_name or "gpt-4",
+                    )
+                    if isinstance(allocation, dict):
+                        if isinstance(allocation.get("review_time"), int):
+                            lesson_plan_data["review_time"] = allocation.get("review_time")
+                        if isinstance(allocation.get("new_lessons"), list) and isinstance(
+                            lesson_plan_data.get("new_lessons"), list
+                        ):
+                            for idx, item in enumerate(lesson_plan_data["new_lessons"]):
+                                if idx < len(allocation["new_lessons"]):
+                                    time_value = allocation["new_lessons"][idx].get("time")
+                                    if isinstance(time_value, int):
+                                        item["time"] = time_value
+                    ok, reason = validate_time_allocation(lesson_plan_data, system_fields["hours"])
+                    if ok:
+                        break
+            if not ok:
+                raise ValueError(f"时间分配校验失败：{reason}")
             
             yield sse_event(
                 {
@@ -125,7 +283,7 @@ async def generate_lesson_plan_stream(
                 }
             )
             
-            # 阶段 4: 填充模板
+            # 阶段 5: 填充模板
             yield sse_event(
                 {
                     "stage": "rendering",
@@ -137,8 +295,7 @@ async def generate_lesson_plan_stream(
             # 渲染 Word 文档
             file_path = render_lesson_plan_docx(lesson_plan_data, course.id)
             
-            week_number = resolve_week_number()
-            title = f"{sequence + 1}广东碧桂园职业学院教案（主页）-第{week_number}周教案"
+            title = f"{sequence + 1}广东碧桂园职业学院教案（主页）-第{system_fields['week']}周教案"
 
             # 保存到数据库（同课次存在则覆盖）
             existing_doc = (

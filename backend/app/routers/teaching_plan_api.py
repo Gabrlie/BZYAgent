@@ -13,6 +13,7 @@ from ..docx_service import render_docx_template
 from ..models import Course, CourseDocument, User
 from ..teaching_plan_service import generate_teaching_plan_schedule
 from ..utils.documents import attach_file_exists, resolve_document_file_path
+from ..utils.plan_params import build_plan_params_from_schedule
 from ..utils.sse import sse_event, sse_response
 
 
@@ -169,6 +170,11 @@ async def generate_teaching_plan_stream(
             ).first()
             
             plan_title = f"《{course.name}》授课计划"
+            plan_params = build_plan_params_from_schedule(
+                schedule,
+                hour_per_class=hour_per_class,
+            )
+            plan_params_json = json.dumps(plan_params, ensure_ascii=False)
 
             if existing_doc:
                 old_file_path = resolve_document_file_path(existing_doc)
@@ -178,6 +184,7 @@ async def generate_teaching_plan_stream(
                 # 更新记录
                 existing_doc.title = plan_title
                 existing_doc.content = json.dumps(template_data, ensure_ascii=False)
+                existing_doc.plan_params = plan_params_json
                 existing_doc.file_url = f"/uploads/{file_path}"
                 db.commit()
                 db.refresh(existing_doc)
@@ -189,6 +196,7 @@ async def generate_teaching_plan_stream(
                     doc_type="plan",
                     title=plan_title,
                     content=json.dumps(template_data, ensure_ascii=False),
+                    plan_params=plan_params_json,
                     file_url=f"/uploads/{file_path}",
                 )
                 db.add(document)

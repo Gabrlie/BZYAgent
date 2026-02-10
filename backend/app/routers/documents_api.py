@@ -11,15 +11,22 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..deps import get_course_for_user, get_document_for_user
+from ..deps import get_course_for_user, get_current_user, get_document_for_user
 from ..utils.paths import UPLOADS_DIR, course_documents_dir, ensure_dir
 from ..utils.documents import attach_file_exists, resolve_document_file_path
+from ..utils.plan_params import (
+    extract_text_from_docx_bytes,
+    extract_text_from_plain_bytes,
+    parse_plan_params_json,
+)
+from ..ai_service import parse_teaching_plan_params
 from ..models import (
     Course,
     CourseDocument,
     DocumentCreateRequest,
     DocumentResponse,
     DocumentUpdateRequest,
+    User,
 )
 
 
@@ -39,6 +46,7 @@ async def create_document(
         doc_type=document_data.doc_type,
         title=document_data.title,
         content=document_data.content,
+        plan_params=document_data.plan_params,
         file_url=document_data.file_url,
         lesson_number=document_data.lesson_number,
     )
@@ -61,6 +69,7 @@ async def upload_document(
     title: str = File(...),
     lesson_number: Optional[int] = File(None),
     course: Course = Depends(get_course_for_user),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """上传文档文件 - 支持 .docx, .pdf, .pptx, .md，最大 10MB"""
@@ -112,6 +121,38 @@ async def upload_document(
             .first()
         )
 
+    plan_params_json: Optional[str] = None
+    if doc_type == "plan":
+        if not user.ai_api_key or not user.ai_base_url:
+            raise HTTPException(status_code=400, detail="请先配置 AI API")
+
+        if file_ext not in [".docx", ".md"]:
+            raise HTTPException(status_code=400, detail="授课计划解析仅支持 .docx 或 .md 文件")
+
+        if file_ext == ".docx":
+            extracted_text = extract_text_from_docx_bytes(content)
+        else:
+            extracted_text = extract_text_from_plain_bytes(content)
+
+        if not extracted_text.strip():
+            raise HTTPException(status_code=400, detail="授课计划解析失败：文档内容为空")
+
+        try:
+            plan_params = await parse_teaching_plan_params(
+                extracted_text=extracted_text,
+                course_total_hours=course.total_hours,
+                api_key=user.ai_api_key,
+                base_url=user.ai_base_url,
+                model=user.ai_model_name or "gpt-4",
+            )
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"授课计划解析失败：{str(e)}")
+
+        if not plan_params or not plan_params.get("schedule"):
+            raise HTTPException(status_code=400, detail="未解析到授课计划课次列表")
+
+        plan_params_json = json.dumps(plan_params, ensure_ascii=False)
+
     if existing_doc:
         old_file_path = resolve_document_file_path(existing_doc)
         if old_file_path and old_file_path.exists():
@@ -135,17 +176,27 @@ async def upload_document(
             .first()
         )
         week_number = lesson_number
-        if plan_doc and plan_doc.content:
-            try:
-                plan_data = json.loads(plan_doc.content)
-                schedule = plan_data.get("schedule") if isinstance(plan_data, dict) else None
-                if schedule:
-                    for item in schedule:
-                        if isinstance(item, dict) and item.get("order") == lesson_number:
+        if plan_doc:
+            schedule = None
+            if plan_doc.plan_params:
+                parsed = parse_plan_params_json(plan_doc.plan_params)
+                if isinstance(parsed, dict):
+                    schedule = parsed.get("schedule")
+            elif plan_doc.content:
+                try:
+                    plan_data = json.loads(plan_doc.content)
+                    schedule = plan_data.get("schedule") if isinstance(plan_data, dict) else None
+                except Exception:
+                    schedule = None
+
+            if schedule:
+                for item in schedule:
+                    if isinstance(item, dict) and item.get("order") == lesson_number:
+                        try:
                             week_number = int(item.get("week"))
-                            break
-            except Exception:
-                week_number = lesson_number
+                        except Exception:
+                            week_number = lesson_number
+                        break
         title = f"{lesson_number + 1}广东碧桂园职业学院教案（主页）-第{week_number}周教案"
 
     try:
@@ -153,6 +204,8 @@ async def upload_document(
             existing_doc.doc_type = "lesson" if doc_type == "lesson" else doc_type
             existing_doc.title = title
             existing_doc.file_url = file_url
+            if plan_params_json:
+                existing_doc.plan_params = plan_params_json
             if lesson_number is not None:
                 existing_doc.lesson_number = lesson_number
             db.commit()
@@ -163,6 +216,7 @@ async def upload_document(
                 course_id=course.id,
                 doc_type=doc_type,
                 title=title,
+                plan_params=plan_params_json,
                 file_url=file_url,
                 lesson_number=lesson_number,
             )

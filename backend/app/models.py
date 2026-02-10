@@ -118,6 +118,7 @@ class CourseDocument(Base):
     doc_type = Column(String(20), nullable=False)  # 文档类型: standard/plan/info/lesson/courseware
     title = Column(String(200), nullable=False)  # 文档标题
     content = Column(Text, nullable=True)  # 文档内容（AI 生成或手动编辑）
+    plan_params = Column(Text, nullable=True)  # 授课计划参数（JSON）
     file_url = Column(String(500), nullable=True)  # 文件 URL（上传的文档）
     lesson_number = Column(Integer, nullable=True)  # 课次编号（仅 lesson 和 courseware 使用）
     
@@ -264,6 +265,7 @@ class DocumentCreateRequest(BaseModel):
     doc_type: str  # standard/plan/info/lesson/courseware
     title: str
     content: Optional[str] = None
+    plan_params: Optional[str] = None
     file_url: Optional[str] = None
     lesson_number: Optional[int] = None
 
@@ -272,6 +274,7 @@ class DocumentUpdateRequest(BaseModel):
     """更新文档请求模型"""
     title: Optional[str] = None
     content: Optional[str] = None
+    plan_params: Optional[str] = None
     file_url: Optional[str] = None
     lesson_number: Optional[int] = None
 
@@ -284,6 +287,7 @@ class DocumentResponse(BaseModel):
     doc_type: str
     title: str
     content: Optional[str] = None
+    plan_params: Optional[str] = None
     file_url: Optional[str] = None
     lesson_number: Optional[int] = None
     file_exists: Optional[bool] = None
