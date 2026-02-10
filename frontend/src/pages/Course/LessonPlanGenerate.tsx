@@ -103,6 +103,10 @@ const LessonPlanGenerate: React.FC = () => {
             message.error('C类课程教案暂未开发，请自行上传教案');
             return;
         }
+        if (teachingPlan && !teachingPlan.content) {
+            message.error('当前授课计划为上传文档，无法生成教案，请使用系统生成授课计划');
+            return;
+        }
         if (!teachingPlan) {
             message.error('请先创建授课计划');
             return;
@@ -149,7 +153,7 @@ const LessonPlanGenerate: React.FC = () => {
     const handleViewDocument = () => {
         if (documentId) {
             // 跳转到预览页面（后续实现）
-            history.push(`/course/${courseId}/lesson-plan/${documentId}`);
+            history.push(`/courses/${courseId}/lesson-plan/${documentId}`);
         }
     };
 
@@ -194,6 +198,25 @@ const LessonPlanGenerate: React.FC = () => {
                         showIcon
                     />
                 )}
+                {teachingPlan && !teachingPlan.content && (
+                    <Alert
+                        message="授课计划为上传文档"
+                        description={
+                            <div>
+                                <p>上传的授课计划无法用于教案生成，请使用系统生成授课计划。</p>
+                                <Button
+                                    type="primary"
+                                    onClick={() => history.push(`/courses/${courseId}/teaching-plan/generate`)}
+                                    style={{ marginTop: 8 }}
+                                >
+                                    前往生成授课计划
+                                </Button>
+                            </div>
+                        }
+                        type="warning"
+                        showIcon
+                    />
+                )}
                 {!teachingPlan ? (
                     <Alert
                         message="缺少授课计划"
@@ -223,7 +246,7 @@ const LessonPlanGenerate: React.FC = () => {
 
                 {/* 输入表单 */}
                 {/* 输入表单 / 进度显示 */}
-                {teachingPlan && !progress && course?.course_type !== 'C' && (
+                {teachingPlan && teachingPlan.content && !progress && course?.course_type !== 'C' && (
                     <Card title="基础信息">
                         <Form
                             form={form}

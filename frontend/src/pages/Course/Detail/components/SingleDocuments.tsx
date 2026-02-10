@@ -2,7 +2,7 @@
  * 单份文档管理组件 - 课程标准、授课计划
  */
 import { ProList } from '@ant-design/pro-components';
-import { Button, message, Space, Tag, Modal, Upload } from 'antd';
+import { Button, message, Space, Tag, Modal, Upload, Alert } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
 import {
     CloudUploadOutlined,
@@ -170,6 +170,15 @@ const SingleDocuments: React.FC<SingleDocumentsProps> = ({ courseId }) => {
                                     </Space>
                                 );
                             }
+                            if (!doc.content) {
+                                return (
+                                    <Space>
+                                        <Tag color="processing">已上传</Tag>
+                                        <span>{doc.title}</span>
+                                        <span>上传文档无法使用AI生成与编辑功能</span>
+                                    </Space>
+                                );
+                            }
                             return (
                                 <Space>
                                     <Tag color="success">
@@ -202,12 +211,18 @@ const SingleDocuments: React.FC<SingleDocumentsProps> = ({ courseId }) => {
                                 >
                                     {intl.formatMessage({ id: 'pages.courses.documents.upload' })}
                                 </Button>,
-                                doc && !isMissingFile && (
+                                doc && !isMissingFile && doc.content && (
                                     <Button
                                         key="edit"
                                         type="link"
                                         icon={<EditOutlined />}
-                                        onClick={() => message.info('编辑功能开发中')}
+                                        onClick={() => {
+                                            if (record.docType === 'plan') {
+                                                navigate(`/courses/${courseId}/teaching-plan/${doc.id}`);
+                                                return;
+                                            }
+                                            message.info('编辑功能开发中');
+                                        }}
                                     >
                                         {intl.formatMessage({ id: 'pages.courses.documents.edit' })}
                                     </Button>
@@ -238,11 +253,17 @@ const SingleDocuments: React.FC<SingleDocumentsProps> = ({ courseId }) => {
                 cancelText="取消"
                 destroyOnClose
             >
+                <Alert
+                    message="上传文档仅用于下载与查看，无法使用AI生成与编辑功能"
+                    type="warning"
+                    showIcon
+                    style={{ marginBottom: 12 }}
+                />
                 <Upload
                     fileList={uploadFileList}
                     beforeUpload={() => false}
                     maxCount={1}
-                    accept=".docx,.pdf,.pptx,.md"
+                    accept=".doc,.docx"
                     onChange={({ fileList }) => setUploadFileList(fileList.slice(-1))}
                 >
                     <Button icon={<CloudUploadOutlined />}>选择文件</Button>

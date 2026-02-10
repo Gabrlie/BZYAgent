@@ -81,6 +81,11 @@ export async function updateDocument(documentId: number, params: DocumentUpdateP
     return put<CourseDocument>(`/api/documents/${documentId}`, params);
 }
 
+/** 重新渲染文档 */
+export async function renderDocument(documentId: number) {
+    return post<CourseDocument>(`/api/documents/${documentId}/render`, {});
+}
+
 /** 删除文档 */
 export async function deleteDocument(documentId: number) {
     return del<{ message: string }>(`/api/documents/${documentId}`);

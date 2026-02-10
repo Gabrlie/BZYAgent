@@ -11,22 +11,20 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..deps import get_course_for_user, get_current_user, get_document_for_user
+from ..deps import get_course_for_user, get_document_for_user
 from ..utils.paths import UPLOADS_DIR, course_documents_dir, ensure_dir
 from ..utils.documents import attach_file_exists, resolve_document_file_path
+from ..docx_service import render_docx_template, render_lesson_plan_docx
 from ..utils.plan_params import (
-    extract_text_from_docx_bytes,
-    extract_text_from_plain_bytes,
     parse_plan_params_json,
+    build_plan_params_from_content,
 )
-from ..ai_service import parse_teaching_plan_params
 from ..models import (
     Course,
     CourseDocument,
     DocumentCreateRequest,
     DocumentResponse,
     DocumentUpdateRequest,
-    User,
 )
 
 
@@ -69,11 +67,10 @@ async def upload_document(
     title: str = File(...),
     lesson_number: Optional[int] = File(None),
     course: Course = Depends(get_course_for_user),
-    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """上传文档文件 - 支持 .docx, .pdf, .pptx, .md，最大 10MB"""
-    allowed_extensions = [".docx", ".pdf", ".pptx", ".md"]
+    """上传文档文件 - 支持 .docx, .doc，最大 10MB"""
+    allowed_extensions = [".docx", ".doc"]
     file_ext = Path(file.filename).suffix.lower()
     if file_ext not in allowed_extensions:
         raise HTTPException(
@@ -122,36 +119,7 @@ async def upload_document(
         )
 
     plan_params_json: Optional[str] = None
-    if doc_type == "plan":
-        if not user.ai_api_key or not user.ai_base_url:
-            raise HTTPException(status_code=400, detail="请先配置 AI API")
-
-        if file_ext not in [".docx", ".md"]:
-            raise HTTPException(status_code=400, detail="授课计划解析仅支持 .docx 或 .md 文件")
-
-        if file_ext == ".docx":
-            extracted_text = extract_text_from_docx_bytes(content)
-        else:
-            extracted_text = extract_text_from_plain_bytes(content)
-
-        if not extracted_text.strip():
-            raise HTTPException(status_code=400, detail="授课计划解析失败：文档内容为空")
-
-        try:
-            plan_params = await parse_teaching_plan_params(
-                extracted_text=extracted_text,
-                course_total_hours=course.total_hours,
-                api_key=user.ai_api_key,
-                base_url=user.ai_base_url,
-                model=user.ai_model_name or "gpt-4",
-            )
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"授课计划解析失败：{str(e)}")
-
-        if not plan_params or not plan_params.get("schedule"):
-            raise HTTPException(status_code=400, detail="未解析到授课计划课次列表")
-
-        plan_params_json = json.dumps(plan_params, ensure_ascii=False)
+    plan_content_json: Optional[str] = None
 
     if existing_doc:
         old_file_path = resolve_document_file_path(existing_doc)
@@ -204,8 +172,9 @@ async def upload_document(
             existing_doc.doc_type = "lesson" if doc_type == "lesson" else doc_type
             existing_doc.title = title
             existing_doc.file_url = file_url
-            if plan_params_json:
-                existing_doc.plan_params = plan_params_json
+            if doc_type == "plan":
+                existing_doc.plan_params = None
+                existing_doc.content = None
             if lesson_number is not None:
                 existing_doc.lesson_number = lesson_number
             db.commit()
@@ -216,6 +185,7 @@ async def upload_document(
                 course_id=course.id,
                 doc_type=doc_type,
                 title=title,
+                content=plan_content_json,
                 plan_params=plan_params_json,
                 file_url=file_url,
                 lesson_number=lesson_number,
@@ -311,9 +281,59 @@ async def update_document(
     for field, value in update_data.items():
         setattr(document, field, value)
 
+    if document.doc_type == "plan" and "content" in update_data and update_data.get("content"):
+        try:
+            content_data = json.loads(update_data["content"])
+            params = build_plan_params_from_content(content_data) if isinstance(content_data, dict) else None
+            if params:
+                document.plan_params = json.dumps(params, ensure_ascii=False)
+        except Exception:
+            pass
+
     db.commit()
     db.refresh(document)
 
+    return document
+
+
+@router.post("/documents/{document_id}/render", response_model=DocumentResponse)
+async def render_document(
+    document: CourseDocument = Depends(get_document_for_user),
+    db: Session = Depends(get_db),
+):
+    """根据文档内容重新渲染 Word 文件"""
+    if document.doc_type not in ["lesson", "lesson_plan", "plan"]:
+        raise HTTPException(status_code=400, detail="仅支持教案与授课计划文档渲染")
+
+    if not document.content:
+        raise HTTPException(status_code=400, detail="文档内容为空，无法渲染")
+
+    try:
+        data = json.loads(document.content)
+    except Exception:
+        raise HTTPException(status_code=400, detail="文档内容格式错误，无法渲染")
+
+    if document.doc_type == "plan":
+        file_path = render_docx_template(
+            template_name="授课计划模板.docx",
+            data=data,
+            course_id=document.course_id,
+        )
+    else:
+        file_path = render_lesson_plan_docx(data, document.course_id)
+    new_file_url = f"/uploads/{file_path}"
+
+    old_file_path = resolve_document_file_path(document)
+    if old_file_path and old_file_path.exists():
+        if old_file_path.name != Path(file_path).name:
+            try:
+                old_file_path.unlink()
+            except Exception:
+                pass
+
+    document.file_url = new_file_url
+    db.commit()
+    db.refresh(document)
     return document
 
 

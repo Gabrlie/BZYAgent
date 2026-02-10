@@ -113,12 +113,14 @@ async def chat_completion_stream(
 
 async def generate_lesson_plan_content(
     sequence: int,
-    plan_item: Dict[str, Any],
-    system_fields: Dict[str, Any],
+    plan_item: Optional[Dict[str, Any]],
+    system_fields: Optional[Dict[str, Any]],
+    document_full_text: str,
     course_context: str,
     api_key: str,
     base_url: str,
-    model: str = "gpt-4"
+    model: str = "gpt-4",
+    strict_mode: bool = True,
 ) -> dict:
     """
     生成教案的结构化内容
@@ -127,10 +129,12 @@ async def generate_lesson_plan_content(
         sequence: 授课顺序
         plan_item: 授课计划条目
         system_fields: 系统计算字段
+        document_full_text: 授课计划全文
         course_context: 课程上下文信息
         api_key: OpenAI API Key
         base_url: OpenAI Base URL
         model: 模型名称
+        strict_mode: 是否启用系统字段严格校验
         
     Returns:
         结构化的教案数据（字典）
@@ -144,8 +148,21 @@ async def generate_lesson_plan_content(
 
 # Input Data (基础信息)
 1. **授课顺序 (Sequence)**: {sequence}
-2. **系统计算字段 (System Fields)**: {json.dumps(system_fields, ensure_ascii=False)}
-3. **授课计划条目 (Plan Item)**: {json.dumps(plan_item, ensure_ascii=False)}
+2. **授课计划全文 (Plan Full Content)**:
+{document_full_text}
+"""
+
+    if system_fields is not None:
+        prompt += f"""
+3. **系统计算字段 (System Fields)**: {json.dumps(system_fields, ensure_ascii=False)}
+"""
+
+    if plan_item is not None:
+        prompt += f"""
+4. **授课计划条目 (Plan Item)**: {json.dumps(plan_item, ensure_ascii=False)}
+"""
+
+    prompt += f"""
 
 # Course Context (课程上下文)
 {course_context}
@@ -156,8 +173,19 @@ async def generate_lesson_plan_content(
 ## 1. 格式要求
 * **输出格式**：必须且只输出一个标准的 JSON 对象。不要包含 Markdown 代码块标记（如 ```json```），不要包含任何解释性文字或多余输出。
 * **Key 值命名**：必须严格使用指定的英文 Key：project_name, week, sequence, hours, total_hours, knowledge_goals, ability_goals, quality_goals, teaching_content, teaching_focus, teaching_difficulty, review_content, review_time, new_lessons, assessment_content, summary_content, homework_content。
+"""
+
+    if strict_mode:
+        prompt += """
 * **系统字段必须复用**：`project_name`, `week`, `sequence`, `hours`, `total_hours` 必须与 System Fields 完全一致，不允许改写或重新计算。
-* **授课计划条目为唯一依据**：项目名称必须来自 Plan Item 中的 `title`，教学内容与新课教学需围绕 `tasks` 展开。
+* **授课计划条目为唯一依据**：`project_name` 必须完全等于 Plan Item 的 `title`，教学内容与新课教学需围绕 `tasks` 展开。
+"""
+    else:
+        prompt += """
+* **字段推断要求**：未提供 System Fields 与 Plan Item 时，`sequence` 必须等于输入的授课顺序，其余 `project_name`、`week`、`hours`、`total_hours` 请结合授课计划全文合理推断并保持一致性。
+"""
+
+    prompt += """
 
 ## 2. 内容质量规则
 * **教学目标 (goals)**：`knowledge_goals`、`ability_goals`、`quality_goals` 三部分。

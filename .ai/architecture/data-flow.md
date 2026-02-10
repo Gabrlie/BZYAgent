@@ -41,6 +41,7 @@ sequenceDiagram
   participant FS as "Filesystem"
   FE->>BE: GET /api/courses/{id}/generate-lesson-plan/stream
   BE->>DB: 读取课程与授课计划文档
+  BE-->>FE: 若授课计划为上传文档则返回错误提示
   BE->>AI: 生成教案 JSON
   AI-->>BE: 教案结构化 JSON
   BE->>FS: 渲染教案 Word 文档

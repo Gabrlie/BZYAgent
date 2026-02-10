@@ -2,7 +2,7 @@
  * 多份文档管理组件 - 教案、课件
  */
 import { ProTable } from '@ant-design/pro-components';
-import { Button, message, Modal, Tag, Upload, Form, InputNumber } from 'antd';
+import { Button, message, Modal, Tag, Upload, Form, InputNumber, Alert, Space } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
 import {
     EditOutlined,
@@ -119,6 +119,14 @@ const MultiDocuments: React.FC<MultiDocumentsProps> = ({
                     if (record.file_exists === false) {
                         return <Tag color="warning">文件不存在</Tag>;
                     }
+                    if (!record.content) {
+                        return (
+                            <Space>
+                                <Tag color="processing">已上传</Tag>
+                                <span>上传文档无法使用AI生成与编辑功能</span>
+                            </Space>
+                        );
+                    }
                     return <Tag color="success">已生成</Tag>;
                 },
             },
@@ -136,6 +144,7 @@ const MultiDocuments: React.FC<MultiDocumentsProps> = ({
                 width: 220,
                 render: (_: any, record: CourseDocument) => {
                     const isMissingFile = record.file_exists === false;
+                    const isUploaded = Boolean(record.file_url && !record.content);
                     const canDownload = record.file_url && !isMissingFile;
 
                     if (isMissingFile) {
@@ -173,7 +182,14 @@ const MultiDocuments: React.FC<MultiDocumentsProps> = ({
                             type="link"
                             size="small"
                             icon={<EditOutlined />}
-                            onClick={() => message.info('编辑功能开发中')}
+                            onClick={() => {
+                                if (docType === 'lesson') {
+                                    navigate(`/courses/${courseId}/lesson-plan/${record.id}`);
+                                    return;
+                                }
+                                message.info('编辑功能开发中');
+                            }}
+                            disabled={isUploaded}
                         >
                             {intl.formatMessage({ id: 'pages.courses.documents.edit' })}
                         </Button>,
@@ -340,6 +356,12 @@ const MultiDocuments: React.FC<MultiDocumentsProps> = ({
                 destroyOnClose
             >
                 <Form form={uploadForm} layout="vertical">
+                    <Alert
+                        message="上传文档仅用于下载与查看，无法使用AI生成与编辑功能"
+                        type="warning"
+                        showIcon
+                        style={{ marginBottom: 12 }}
+                    />
                     <Form.Item
                         label="授课顺序"
                         name="lesson_number"
@@ -354,7 +376,7 @@ const MultiDocuments: React.FC<MultiDocumentsProps> = ({
                             fileList={uploadFileList}
                             beforeUpload={() => false}
                             maxCount={1}
-                            accept=".docx,.pdf,.pptx,.md"
+                            accept=".doc,.docx"
                             onChange={({ fileList }) => setUploadFileList(fileList.slice(-1))}
                         >
                             <Button icon={<CloudUploadOutlined />}>选择文件</Button>

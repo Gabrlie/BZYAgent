@@ -18,13 +18,10 @@ from ..utils.plan_params import (
     build_plan_params_from_content,
     get_plan_item,
     compute_cumulative_hours,
-    extract_text_from_docx,
-    extract_text_from_plain_bytes,
 )
 from ..utils.sse import sse_event, sse_response
 from ..ai_service import (
     generate_lesson_plan_content,
-    parse_teaching_plan_params,
     regenerate_time_allocation,
     validate_time_allocation,
 )
@@ -97,6 +94,8 @@ async def generate_lesson_plan_stream(
     plan_doc = plan_docs[0]
 
     async def resolve_plan_params() -> dict:
+        if not plan_doc.content:
+            raise ValueError("当前授课计划为上传文档，无法用于教案生成，请使用系统生成授课计划")
         if plan_doc.plan_params:
             parsed = parse_plan_params_json(plan_doc.plan_params)
             if parsed and parsed.get("schedule"):
@@ -113,36 +112,7 @@ async def generate_lesson_plan_stream(
                     plan_doc.plan_params = json.dumps(params, ensure_ascii=False)
                     db.commit()
                     return params
-
-        file_path = resolve_document_file_path(plan_doc)
-        if not file_path or not file_path.exists():
-            raise ValueError("授课计划文件不存在，无法解析参数")
-
-        file_ext = file_path.suffix.lower()
-        if file_ext not in [".docx", ".md"]:
-            raise ValueError("授课计划解析仅支持 .docx 或 .md 文件")
-
-        if file_ext == ".docx":
-            extracted_text = extract_text_from_docx(file_path)
-        else:
-            extracted_text = extract_text_from_plain_bytes(file_path.read_bytes())
-
-        if not extracted_text.strip():
-            raise ValueError("授课计划解析失败：文档内容为空")
-
-        params = await parse_teaching_plan_params(
-            extracted_text=extracted_text,
-            course_total_hours=course.total_hours,
-            api_key=user.ai_api_key,
-            base_url=user.ai_base_url,
-            model=user.ai_model_name or "gpt-4",
-        )
-        if not params or not params.get("schedule"):
-            raise ValueError("授课计划解析失败：未提取到课次列表")
-
-        plan_doc.plan_params = json.dumps(params, ensure_ascii=False)
-        db.commit()
-        return params
+        raise ValueError("授课计划内容格式不完整，请重新生成授课计划")
     
     async def event_generator() -> AsyncGenerator[str, None]:
         try:
@@ -165,10 +135,14 @@ async def generate_lesson_plan_stream(
                 }
             )
 
+            use_generated_plan = True
+            plan_item_payload = None
+            system_fields = None
+
             plan_params = await resolve_plan_params()
             schedule = plan_params.get("schedule") if isinstance(plan_params, dict) else None
             if not isinstance(schedule, list) or not schedule:
-                raise ValueError("授课计划参数缺失，请重新生成或上传授课计划")
+                raise ValueError("授课计划参数缺失，请重新生成授课计划")
 
             plan_item = get_plan_item(schedule, sequence)
             if not plan_item:
@@ -231,10 +205,12 @@ async def generate_lesson_plan_stream(
                 sequence=sequence,
                 plan_item=plan_item_payload,
                 system_fields=system_fields,
+                document_full_text=plan_doc.content or "",
                 course_context=context_prompt,
                 api_key=user.ai_api_key,
                 base_url=user.ai_base_url,
-                model=user.ai_model_name or "gpt-4"
+                model=user.ai_model_name or "gpt-4",
+                strict_mode=use_generated_plan,
             )
 
             # 覆盖系统字段
