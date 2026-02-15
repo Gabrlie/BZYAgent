@@ -58,3 +58,4 @@ export default {
   'menu.copyright.detail': 'Copyright Detail',
   'menu.papers': 'Paper Management',
 };
+

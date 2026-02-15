@@ -20,4 +20,4 @@ async def test_endpoint(request: Request):
 @router.get("/api", tags=["根路径"])
 async def api_root():
     """API 根路径"""
-    return {"message": "BZYAgent API", "docs": "/docs"}
+    return {"message": "EduAgent Prime API", "docs": "/docs"}

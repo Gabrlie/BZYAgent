@@ -3,3 +3,4 @@ export default {
   'component.tagSelect.collapse': 'Lipat',
   'component.tagSelect.all': 'Semua',
 };
+

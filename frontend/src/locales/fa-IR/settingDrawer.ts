@@ -30,3 +30,4 @@ export default {
   'app.setting.production.hint':
     'صفحه تنظیم فقط در محیط توسعه نمایش داده می شود ، لطفاً دستی تغییر دهید',
 };
+

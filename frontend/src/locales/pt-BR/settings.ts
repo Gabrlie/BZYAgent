@@ -64,3 +64,4 @@ export default {
   'app.settings.open': 'Aberto',
   'app.settings.close': 'Fechado',
 };
+

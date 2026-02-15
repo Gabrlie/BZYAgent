@@ -22,11 +22,12 @@ from .routers.documents_api import router as documents_router
 from .routers.lesson_plan_api import router as lesson_plan_router
 from .routers.teaching_plan_api import router as teaching_plan_router
 from .routers.misc_api import router as misc_router
+from .routers.dashboard_api import router as dashboard_router
 from .routers.copyright_api import router as copyright_router
 
 
 app = FastAPI(
-    title="BZYAgent API",
+    title="EduAgent Prime API",
     description="FastAPI + JWT 认证后端",
     version="1.0.0",
 )
@@ -52,6 +53,7 @@ app.include_router(lesson_plan_router)
 app.include_router(teaching_plan_router)
 app.include_router(misc_router)
 app.include_router(copyright_router)
+app.include_router(dashboard_router)
 
 # 配置静态文件服务（用于下载生成的文档）
 ensure_dir(UPLOADS_DIR)

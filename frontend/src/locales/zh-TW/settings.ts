@@ -57,3 +57,4 @@ export default {
   'app.settings.open': '開',
   'app.settings.close': '關',
 };
+

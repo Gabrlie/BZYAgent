@@ -1,6 +1,6 @@
 export default {
   'pages.layouts.userLayout.title':
-    'Ant Designは、西湖区で最も影響力のあるWebデザイン仕様です。',
+    'EduAgent Primeは、西湖区で最も影響力のあるWebデザイン仕様です。',
   'pages.login.accountLogin.tab': 'アカウントログイン',
   'pages.login.accountLogin.errorMessage':
     'ユーザー名/パスワードが正しくありません(admin/ant.design)',
@@ -75,3 +75,4 @@ export default {
   'pages.searchTable.batchDeletion': 'バッチ削除',
   'pages.searchTable.batchApproval': 'バッチ承認',
 };
+

@@ -16,3 +16,4 @@ export default {
   'component.noticeIcon.empty': 'Tidak ada pemberitahuan',
   'component.noticeIcon.view-more': 'Melihat lebih',
 };
+

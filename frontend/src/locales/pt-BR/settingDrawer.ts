@@ -31,3 +31,4 @@ export default {
   'app.setting.production.hint':
     'O painel de configuração apenas é exibido no ambiente de desenvolvimento, por favor modifique manualmente o',
 };
+

@@ -51,3 +51,4 @@ export default {
   'menu.editor.mind': 'Penyusun Mind',
   'menu.editor.koni': 'Penyusun Koni',
 };
+

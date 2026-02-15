@@ -31,3 +31,4 @@ export default {
   'app.setting.production.hint':
     'Panel pengaturan hanya muncul pada lingkungan pengembangan, silahkan modifikasi secara menual',
 };
+

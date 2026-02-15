@@ -1,9 +1,9 @@
-# BZYAgent 项目梳理（自动生成）
+# EduAgent Prime 项目梳理（自动生成）
 
 ## 总览
 - 类型：课程管理 + AI 教学文档生成的全栈应用
 - 后端：FastAPI + PostgreSQL + SQLAlchemy + Alembic
-- 前端：Umi Max（Ant Design Pro）+ React 19
+- 前端：Umi Max + React 19
 - 认证：JWT（全局中间件）
 - 文档生成：SSE 流式进度 + Word 模板（docxtpl）
 
@@ -46,7 +46,7 @@
 - 授课计划：`GET /api/courses/{course_id}/generate-teaching-plan/stream`
 
 ## 前端要点
-- 框架：Umi Max + Ant Design Pro
+- 框架：Umi Max
 - 请求与鉴权：`frontend/src/requestErrorConfig.ts` 自动注入 JWT
 - 服务层：`frontend/src/services/*`
 - 课程相关页面：`frontend/src/pages/Course/*`
@@ -64,7 +64,7 @@
   - `npm run dev`
 
 ## 备注
-- README 中写的是 Vite + React，但当前前端为 Umi Max（Ant Design Pro）。
+- README 中写的是 Vite + React，但当前前端为 Umi Max。
 - SSE 鉴权：授课计划生成接口通过 URL 参数 token 认证；教案生成接口前端暂未附加 token（可能导致 401）。
 
 ## 数据模型简表
@@ -128,7 +128,7 @@
 - 密码：`admin123`
 
 ## 备注补充
-- README 中写的是 Vite + React，但当前前端为 Umi Max（Ant Design Pro）。
+- README 中写的是 Vite + React，但当前前端为 Umi Max。
 - 教案生成前端使用 EventSource（GET），后端接口为 POST，方法可能不匹配。
 - 教案生成前端未显式附带 token；授课计划接口通过 URL 参数 token 进行鉴权。
 
@@ -141,3 +141,4 @@
 - 新增 `backend/app/utils/paths.py`：统一模板/上传目录路径
 - 新增 `backend/app/utils/sse.py`：统一 SSE 事件与响应头
 - `docx_service.py` 与文档上传/下载逻辑使用统一路径工具
+

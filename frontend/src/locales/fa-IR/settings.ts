@@ -62,3 +62,4 @@ export default {
   'app.settings.open': 'باز کن',
   'app.settings.close': 'بستن',
 };
+

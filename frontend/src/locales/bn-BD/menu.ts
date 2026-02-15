@@ -50,3 +50,4 @@ export default {
   'menu.editor.mind': 'মাইন্ড এডিটর',
   'menu.editor.koni': 'কোনি সম্পাদক',
 };
+

@@ -15,3 +15,4 @@ export default {
   'component.noticeIcon.empty': 'বিজ্ঞপ্তি নেই',
   'component.noticeIcon.view-more': 'আরো দেখুন',
 };
+

@@ -20,3 +20,4 @@ export default {
   ...pwa,
   ...component,
 };
+

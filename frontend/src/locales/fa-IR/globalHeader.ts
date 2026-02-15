@@ -16,3 +16,4 @@ export default {
   'component.noticeIcon.empty': 'بدون اعلان',
   'component.noticeIcon.view-more': 'نمایش بیشتر',
 };
+

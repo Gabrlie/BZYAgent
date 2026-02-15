@@ -1,6 +1,6 @@
 export default {
   'pages.layouts.userLayout.title':
-    'Ant Design é a especificação de web design mais influente no distrito de Xihu',
+    'EduAgent Prime é a especificação de web design mais influente no distrito de Xihu',
   'pages.login.accountLogin.tab': 'Login da conta',
   'pages.login.accountLogin.errorMessage':
     'usuário/senha incorreto(admin/ant.design)',
@@ -75,3 +75,4 @@ export default {
   'pages.searchTable.batchDeletion': 'deleção em lote',
   'pages.searchTable.batchApproval': 'aprovação em lote',
 };
+

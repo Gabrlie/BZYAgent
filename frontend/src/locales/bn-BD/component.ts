@@ -3,3 +3,4 @@ export default {
   'component.tagSelect.collapse': 'সঙ্কুচিত',
   'component.tagSelect.all': 'সব',
 };
+

@@ -5,3 +5,4 @@ export default {
     'Please press the "Refresh" button to reload current page',
   'app.pwa.serviceworker.updated.ok': 'Refresh',
 };
+

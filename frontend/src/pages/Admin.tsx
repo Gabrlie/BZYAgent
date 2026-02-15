@@ -1,4 +1,3 @@
-import { HeartTwoTone, SmileTwoTone } from '@ant-design/icons';
 import { PageContainer } from '@ant-design/pro-components';
 import { useIntl } from '@umijs/max';
 import { Alert, Card, Typography } from 'antd';
@@ -29,20 +28,11 @@ const Admin: React.FC = () => {
           }}
         />
         <Typography.Title level={2} style={{ textAlign: 'center' }}>
-          <SmileTwoTone /> Ant Design Pro{' '}
-          <HeartTwoTone twoToneColor="#eb2f96" /> You
+          管理员控制台
         </Typography.Title>
       </Card>
       <p style={{ textAlign: 'center', marginTop: 24 }}>
-        Want to add more pages? Please refer to{' '}
-        <a
-          href="https://pro.ant.design/docs/block-cn"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          use block
-        </a>
-        。
+        这里用于管理平台配置与权限策略。
       </p>
     </PageContainer>
   );

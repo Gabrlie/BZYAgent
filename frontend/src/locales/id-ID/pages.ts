@@ -1,6 +1,6 @@
 export default {
   'pages.layouts.userLayout.title':
-    'Ant Design adalah spesifikasi desain Web yang paling berpengaruh di Kabupaten Xihu',
+    'EduAgent Prime adalah spesifikasi desain Web yang paling berpengaruh di Kabupaten Xihu',
   'pages.login.accountLogin.tab': 'Login dengan akun',
   'pages.login.accountLogin.errorMessage':
     'Nama pengguna dan kata sandi salah(admin/ant.design)',
@@ -73,3 +73,4 @@ export default {
   'pages.searchTable.batchDeletion': 'Penghapusan batch',
   'pages.searchTable.batchApproval': 'Persetujuan batch',
 };
+

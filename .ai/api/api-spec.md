@@ -26,6 +26,11 @@
 | `PUT` | `/api/courses/{course_id}` | 更新课程 |
 | `DELETE` | `/api/courses/{course_id}` | 删除课程 |
 
+## 仪表盘
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/api/dashboard/summary` | 获取仪表盘统计摘要 |
+
 ## 文档管理
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |

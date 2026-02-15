@@ -3,3 +3,4 @@ export default {
   'component.tagSelect.collapse': 'Diminuir',
   'component.tagSelect.all': 'Todas',
 };
+

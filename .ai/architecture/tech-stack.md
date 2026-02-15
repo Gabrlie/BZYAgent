@@ -10,7 +10,7 @@
 - 运行与依赖管理：uv，uvicorn
 
 ## 前端
-- 框架：Umi Max（Ant Design Pro）
+- 框架：Umi Max
 - 视图库：React 19
 - UI：Ant Design 5
 - 请求与路由：@umijs/max

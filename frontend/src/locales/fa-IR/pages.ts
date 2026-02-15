@@ -73,3 +73,4 @@ export default {
   'pages.searchTable.batchDeletion': 'حذف دسته ای',
   'pages.searchTable.batchApproval': 'تصویب دسته ای',
 };
+

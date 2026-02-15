@@ -58,3 +58,4 @@ export default {
   'app.settings.open': 'খোলা',
   'app.settings.close': 'বন্ধ',
 };
+

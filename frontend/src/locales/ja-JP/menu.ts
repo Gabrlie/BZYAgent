@@ -50,3 +50,4 @@ export default {
   'menu.editor.mind': 'マインドエディター',
   'menu.editor.koni': 'コニエディター',
 };
+

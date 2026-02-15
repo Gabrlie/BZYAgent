@@ -30,3 +30,4 @@ export default {
   'app.setting.production.hint':
     'Setting panel shows in development environment only, please manually modify',
 };
+

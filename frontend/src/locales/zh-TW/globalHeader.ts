@@ -15,3 +15,4 @@ export default {
   'component.noticeIcon.empty': '暫無資料',
   'component.noticeIcon.view-more': '查看更多',
 };
+

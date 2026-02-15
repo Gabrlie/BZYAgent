@@ -71,3 +71,4 @@ export default {
   'pages.searchTable.batchDeletion': 'একসাখে ডিলিট',
   'pages.searchTable.batchApproval': 'একসাখে অনুমোদন',
 };
+

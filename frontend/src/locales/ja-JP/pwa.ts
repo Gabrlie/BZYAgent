@@ -5,3 +5,4 @@ export default {
     '現在のページをリロードするには、「更新」ボタンを押してください',
   'app.pwa.serviceworker.updated.ok': 'リフレッシュ',
 };
+

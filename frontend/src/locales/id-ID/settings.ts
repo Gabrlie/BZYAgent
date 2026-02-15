@@ -62,3 +62,4 @@ export default {
   'app.settings.open': 'Buka',
   'app.settings.close': 'Tutup',
 };
+

@@ -30,3 +30,4 @@ export default {
   'app.setting.production.hint':
     '配置栏只在开发环境用于预览，生产环境不会展现，请拷贝后手动修改配置文件',
 };
+

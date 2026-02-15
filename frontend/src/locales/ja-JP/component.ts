@@ -3,3 +3,4 @@ export default {
   'component.tagSelect.collapse': '折りたたむ',
   'component.tagSelect.all': 'すべて',
 };
+

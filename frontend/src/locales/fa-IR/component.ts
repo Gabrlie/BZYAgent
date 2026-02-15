@@ -3,3 +3,4 @@ export default {
   'component.tagSelect.collapse': 'بسته ',
   'component.tagSelect.all': 'همه',
 };
+

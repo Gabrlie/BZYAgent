@@ -16,3 +16,4 @@ export default {
   'component.noticeIcon.empty': 'No notifications',
   'component.noticeIcon.view-more': 'View more',
 };
+

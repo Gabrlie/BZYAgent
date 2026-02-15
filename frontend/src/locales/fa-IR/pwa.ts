@@ -5,3 +5,4 @@ export default {
     'لطفاً برای بارگیری مجدد صفحه فعلی ، دکمه "تازه سازی" را فشار دهید',
   'app.pwa.serviceworker.updated.ok': 'تازه سازی',
 };
+

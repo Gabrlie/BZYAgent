@@ -61,3 +61,4 @@ export default {
   'app.settings.open': '開く',
   'app.settings.close': '閉じる',
 };
+

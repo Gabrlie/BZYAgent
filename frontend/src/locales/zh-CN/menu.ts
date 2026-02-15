@@ -10,3 +10,4 @@ export default {
   'menu.copyright.detail': '软著项目详情',
   'menu.papers': '论文管理',
 };
+

@@ -31,3 +31,4 @@ export default {
   'app.setting.production.hint':
     '設定パネルは開発環境でのみ表示されます。手動で変更してください',
 };
+

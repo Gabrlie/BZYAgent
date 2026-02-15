@@ -50,3 +50,4 @@ export default {
   'menu.editor.mind': 'ویرایشگر ذهن',
   'menu.editor.koni': 'ویرایشگر Koni',
 };
+

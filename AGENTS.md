@@ -1,9 +1,9 @@
-# BZYAgent 项目 AI 入口文档
+# EduAgent Prime 项目 AI 入口文档
 
 本文档是项目 AI 助手的入口索引，覆盖需求、模块、架构、数据流、算法、安全与扩展规划。深入细节请见 .ai 目录内的专题文档。
 
 ## 项目整体需求概述
-BZYAgent 是面向高职院校教学场景的课程资产管理与教学文档生成平台。核心目标是帮助教师管理课程基本信息、教材与课程目录，并通过 AI 生成授课计划与教案，最终输出标准化 Word 文档，同时提供对话式 AI 助手与历史记录管理。
+EduAgent Prime 是面向高职院校教学场景的课程资产管理与教学文档生成平台。核心目标是帮助教师管理课程基本信息、教材与课程目录，并通过 AI 生成授课计划与教案，最终输出标准化 Word 文档，同时提供对话式 AI 助手与历史记录管理。
 
 ## 功能模块划分
 - 用户认证与账号管理
@@ -18,11 +18,11 @@ BZYAgent 是面向高职院校教学场景的课程资产管理与教学文档�
 
 ## 技术栈说明
 - 后端：FastAPI，SQLAlchemy，Alembic，Python 3.12，uv
-- 前端：Umi Max（Ant Design Pro），React 19，TypeScript，Ant Design
+- 前端：Umi Max，React 19，TypeScript，Ant Design
 - 数据库：PostgreSQL 16（Docker Compose）
 - AI：OpenAI 兼容 API（可配置 Base URL 与模型），支持流式输出
 - 文档生成：docxtpl + Word 模板
-- 文件存储：本地文件系统 `backend/uploads`
+- 文件存储：本地文件系统 `data/uploads`
 
 ## 核心业务逻辑描述
 1. 用户登录后获得 JWT，前端保存到 `localStorage` 并在请求头注入。
