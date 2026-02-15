@@ -87,3 +87,13 @@ BZYAgent 是面向高职院校教学场景的课程资产管理与教学文档�
 - 性能要求：`D:\Develop\Projects\BZYAgent\.ai\requirements\performance.md`
 - 测试策略：`D:\Develop\Projects\BZYAgent\.ai\testing\testing.md`
 - 部署运维：`D:\Develop\Projects\BZYAgent\.ai\deployment\deployment.md`
+
+## 已同步的最新改动（软著材料模块）
+- 新增软著材料模块（独立项目）并深度集成前后端。
+- 输出仅 ZIP：生成完成后通过下载接口获取，不展示输出目录路径。
+- 生成流程为后台任务 + 前端长轮询进度（可关闭页面，后台继续生成）。
+- 生成进度弹窗、超时提示、使用说明弹窗、生成模式区别说明已添加。
+- 列表状态显示中文，并可点击状态打开进度弹窗。
+- 有生成任务后隐藏“一键生成”，仅保留“重新生成”。
+- 前端检测限流（Rate Limit）错误后弹窗提示用户更换接口/稍后再试，并提醒避免同时生成多个任务。
+- 单容器部署：根目录 `Dockerfile` 负责构建前端并由后端提供静态资源；删除 `backend/Dockerfile`、`frontend/Dockerfile`。

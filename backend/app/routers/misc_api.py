@@ -17,7 +17,7 @@ async def test_endpoint(request: Request):
     return {"message": "认证成功", "username": request.state.username}
 
 
-@router.get("/", tags=["根路径"])
-async def root():
-    """根路径"""
+@router.get("/api", tags=["根路径"])
+async def api_root():
+    """API 根路径"""
     return {"message": "BZYAgent API", "docs": "/docs"}

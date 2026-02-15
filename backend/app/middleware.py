@@ -31,6 +31,11 @@ class JWTAuthMiddleware:
             return
 
         path = scope.get("path", "")
+        # 非 API 路径（前端静态资源等）不做鉴权
+        if not path.startswith("/api/"):
+            await self.app(scope, receive, send)
+            return
+
         if path in self.EXCLUDE_PATHS or path.startswith("/uploads/"):
             await self.app(scope, receive, send)
             return

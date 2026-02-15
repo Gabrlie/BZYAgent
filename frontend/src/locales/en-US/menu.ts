@@ -54,5 +54,7 @@ export default {
   'menu.courses.create': 'Create Course',
   'menu.courses.detail': 'Course Details',
   'menu.courses.edit': 'Edit Course',
+  'menu.copyright': 'Copyright Materials',
+  'menu.copyright.detail': 'Copyright Detail',
   'menu.papers': 'Paper Management',
 };

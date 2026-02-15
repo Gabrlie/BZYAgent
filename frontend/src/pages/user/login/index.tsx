@@ -192,7 +192,20 @@ const Login: React.FC = () => {
       await fetchUserInfo();
 
       const urlParams = new URL(window.location.href).searchParams;
-      window.location.href = urlParams.get('redirect') || '/';
+      const redirectParam = urlParams.get('redirect');
+      let targetPath = '/';
+      if (redirectParam) {
+        try {
+          const redirectUrl = new URL(redirectParam, window.location.origin);
+          // 只允许回到当前站点，避免端口/域名丢失或安全问题
+          if (redirectUrl.origin === window.location.origin) {
+            targetPath = `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`;
+          }
+        } catch (error) {
+          // ignore invalid redirect
+        }
+      }
+      window.location.href = targetPath;
     } catch (err: any) {
       console.error('登录失败:', err);
       const errorMessage = err?.response?.data?.detail || '登录失败，请检查用户名和密码';

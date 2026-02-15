@@ -18,9 +18,11 @@
 
 ## 数据库与存储
 - 数据库：PostgreSQL 16（Docker Compose）
-- 文件存储：本地文件系统 `backend/uploads`
+- 文件存储：本地文件系统 `data/uploads`
+- 软著材料：`data/copyright` 下的项目与 ZIP
 - 模板：`backend/templates` 下的 Word 模板
 
 ## 环境与配置
 - 环境变量：`.env` 与 `.env.example`
 - 本地代理：前端 `config/proxy.ts` 指向 `http://localhost:8000`
+- 生产容器：单容器部署，后端提供前端静态资源

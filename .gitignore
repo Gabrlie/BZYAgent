@@ -35,3 +35,6 @@ node_modules/
 
 # Data
 data/
+
+# Temp vendor clone
+.tmp-ai-copyright/

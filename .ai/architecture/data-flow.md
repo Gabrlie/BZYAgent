@@ -63,3 +63,24 @@ sequenceDiagram
   BE-->>FE: 流式输出
   BE->>DB: 保存消息与回复
 ```
+
+## 软著材料生成
+```mermaid
+sequenceDiagram
+  participant FE as "Frontend"
+  participant BE as "Backend"
+  participant AI as "AI Provider"
+  participant DB as "PostgreSQL"
+  participant FS as "Filesystem"
+  FE->>BE: POST /api/copyright/projects/{id}/generate
+  BE->>DB: 创建生成任务（queued）
+  BE-->>FE: 返回任务信息
+  BE->>AI: 依次生成框架/页面/UI/源码/手册
+  BE->>FS: 写入 process_docs/output_docs/output_sourcecode
+  BE->>FS: 打包 ZIP
+  BE->>DB: 更新任务进度与结果
+  FE->>BE: GET /api/copyright/projects/{id}/jobs/latest (长轮询)
+  BE-->>FE: 返回进度/状态
+  FE->>BE: GET /api/copyright/projects/{id}/download
+  BE-->>FE: 下载 ZIP
+```

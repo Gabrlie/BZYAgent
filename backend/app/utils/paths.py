@@ -11,6 +11,10 @@ DATA_DIR = PROJECT_DIR / "data"
 UPLOADS_DIR = DATA_DIR / "uploads"
 GENERATED_DIR = UPLOADS_DIR / "generated"
 TEMPLATES_DIR = BACKEND_DIR / "templates"
+COPYRIGHT_DIR = DATA_DIR / "copyright"
+COPYRIGHT_PROJECTS_DIR = COPYRIGHT_DIR / "projects"
+COPYRIGHT_ZIPS_DIR = COPYRIGHT_DIR / "zips"
+FRONTEND_DIST_DIR = PROJECT_DIR / "frontend" / "dist"
 
 
 def ensure_dir(path: Path) -> Path:

@@ -19,34 +19,23 @@ services:
       timeout: 5s
       retries: 5
 
-  backend:
+  app:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
-    container_name: bzyagent-backend
+    container_name: bzyagent-app
     env_file:
       - .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin123}@postgres:5432/${POSTGRES_DB:-bzyagent}
       HOST: 0.0.0.0
       PORT: 8000
-      CORS_ORIGINS: http://localhost:8001,http://127.0.0.1:8001
+      CORS_ORIGINS: http://localhost:8000,http://127.0.0.1:8000
     ports:
       - "8000:8000"
     volumes:
-      - ./data/uploads:/app/data/uploads
+      - ./data:/app/data
     depends_on:
       postgres:
         condition: service_healthy
-    restart: unless-stopped
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: bzyagent-frontend
-    ports:
-      - "8001:80"
-    depends_on:
-      - backend
     restart: unless-stopped

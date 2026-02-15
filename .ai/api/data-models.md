@@ -59,7 +59,44 @@
 | `created_at` | datetime | 创建时间 |
 | `updated_at` | datetime | 更新时间 |
 
+## CopyrightProject
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | int | 主键 |
+| `user_id` | int | 归属用户 |
+| `name` | string | 项目名称 |
+| `domain` | string | 领域 |
+| `system_name` | string | 软件名称 |
+| `software_abbr` | string | 软件简称 |
+| `description` | text | 系统简介 |
+| `output_type` | string | 输出类型（当前仅 ZIP） |
+| `generation_mode` | string | `fast` 或 `full` |
+| `include_sourcecode` | bool | 是否包含源代码 |
+| `include_ui_desc` | bool | 是否包含 UI 说明 |
+| `include_tech_desc` | bool | 是否包含技术栈说明 |
+| `requirements_text` | text | 需求文档内容 |
+| `ui_description` | text | UI 说明 |
+| `tech_description` | text | 技术栈说明 |
+| `created_at` | datetime | 创建时间 |
+| `updated_at` | datetime | 更新时间 |
+
+## CopyrightJob
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | int | 主键 |
+| `project_id` | int | 关联软著项目 |
+| `status` | string | `queued` `running` `completed` `failed` |
+| `stage` | string | 阶段标识（preparing/generating/rendering/saving/completed/error） |
+| `message` | string | 进度说明 |
+| `progress` | int | 进度百分比 |
+| `error` | text | 错误信息 |
+| `output_zip_path` | string | ZIP 文件路径 |
+| `created_at` | datetime | 创建时间 |
+| `updated_at` | datetime | 更新时间 |
+
 ## 关系
 - User 1..N Course
 - User 1..N Message
 - Course 1..N CourseDocument
+- User 1..N CopyrightProject
+- CopyrightProject 1..N CopyrightJob

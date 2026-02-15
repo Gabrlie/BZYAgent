@@ -5,7 +5,7 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from .database import get_db
-from .models import Course, CourseDocument, User
+from .models import Course, CourseDocument, User, CopyrightProject
 
 
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
@@ -52,3 +52,19 @@ def get_document_for_user(
         raise HTTPException(status_code=403, detail="无权访问此文档")
 
     return document
+
+
+def get_copyright_project_for_user(
+    project_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CopyrightProject:
+    """获取当前用户的软著项目"""
+    project = (
+        db.query(CopyrightProject)
+        .filter(CopyrightProject.id == project_id, CopyrightProject.user_id == user.id)
+        .first()
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="软著项目不存在")
+    return project

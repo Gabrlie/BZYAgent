@@ -30,6 +30,11 @@ class User(Base):
     # 关系
     messages = relationship("Message", back_populates="user", cascade="all, delete-orphan")
     courses = relationship("Course", back_populates="user", cascade="all, delete-orphan")
+    copyright_projects = relationship(
+        "CopyrightProject",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
 
 class Message(Base):
@@ -128,6 +133,56 @@ class CourseDocument(Base):
     
     # 关系
     course = relationship("Course", back_populates="documents")
+
+
+class CopyrightProject(Base):
+    """软著项目表模型"""
+    __tablename__ = "copyright_projects"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+
+    name = Column(String(200), nullable=False)
+    domain = Column(String(100), nullable=True)
+    system_name = Column(String(200), nullable=True)
+    software_abbr = Column(String(100), nullable=True)
+    description = Column(Text, nullable=True)
+
+    output_type = Column(String(20), nullable=False, default="zip")
+    generation_mode = Column(String(20), nullable=False, default="fast")
+    include_sourcecode = Column(Boolean, default=True, nullable=False)
+    include_ui_desc = Column(Boolean, default=True, nullable=False)
+    include_tech_desc = Column(Boolean, default=True, nullable=False)
+
+    requirements_text = Column(Text, nullable=True)
+    ui_description = Column(Text, nullable=True)
+    tech_description = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    user = relationship("User", back_populates="copyright_projects")
+    jobs = relationship("CopyrightJob", back_populates="project", cascade="all, delete-orphan")
+
+
+class CopyrightJob(Base):
+    """软著项目生成任务表模型"""
+    __tablename__ = "copyright_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("copyright_projects.id"), nullable=False, index=True)
+
+    status = Column(String(20), nullable=False, default="queued")
+    stage = Column(String(30), nullable=True)
+    message = Column(Text, nullable=True)
+    progress = Column(Integer, nullable=True)
+    error = Column(Text, nullable=True)
+    output_zip_path = Column(String(500), nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    project = relationship("CopyrightProject", back_populates="jobs")
 
 
 # Pydantic 模型 - 响应模型
@@ -303,4 +358,91 @@ class CourseWithDocumentsResponse(BaseModel):
     """课程及其文档响应模型"""
     course: CourseResponse
     documents: List[DocumentResponse]
+
+
+# ==================== 软著项目模型 ====================
+
+class CopyrightJobResponse(BaseModel):
+    """软著生成任务响应模型"""
+    id: int
+    project_id: int
+    status: str
+    stage: Optional[str] = None
+    message: Optional[str] = None
+    progress: Optional[int] = None
+    error: Optional[str] = None
+    output_zip_path: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CopyrightProjectCreateRequest(BaseModel):
+    """创建软著项目请求模型"""
+    name: str
+    domain: Optional[str] = None
+    system_name: Optional[str] = None
+    software_abbr: Optional[str] = None
+    description: Optional[str] = None
+    output_type: Optional[str] = "zip"
+    generation_mode: Optional[str] = "fast"
+    include_sourcecode: Optional[bool] = True
+    include_ui_desc: Optional[bool] = True
+    include_tech_desc: Optional[bool] = True
+    requirements_text: Optional[str] = None
+    ui_description: Optional[str] = None
+    tech_description: Optional[str] = None
+
+
+class CopyrightProjectUpdateRequest(BaseModel):
+    """更新软著项目请求模型"""
+    name: Optional[str] = None
+    domain: Optional[str] = None
+    system_name: Optional[str] = None
+    software_abbr: Optional[str] = None
+    description: Optional[str] = None
+    output_type: Optional[str] = None
+    generation_mode: Optional[str] = None
+    include_sourcecode: Optional[bool] = None
+    include_ui_desc: Optional[bool] = None
+    include_tech_desc: Optional[bool] = None
+    requirements_text: Optional[str] = None
+    ui_description: Optional[str] = None
+    tech_description: Optional[str] = None
+
+
+class CopyrightProjectRequirementsRequest(BaseModel):
+    """更新软著项目需求文档请求模型"""
+    requirements_text: Optional[str] = None
+    ui_description: Optional[str] = None
+    tech_description: Optional[str] = None
+    include_ui_desc: Optional[bool] = None
+    include_tech_desc: Optional[bool] = None
+
+
+class CopyrightProjectResponse(BaseModel):
+    """软著项目响应模型"""
+    id: int
+    user_id: int
+    name: str
+    domain: Optional[str] = None
+    system_name: Optional[str] = None
+    software_abbr: Optional[str] = None
+    description: Optional[str] = None
+    output_type: str
+    generation_mode: str
+    include_sourcecode: bool
+    include_ui_desc: bool
+    include_tech_desc: bool
+    requirements_text: Optional[str] = None
+    ui_description: Optional[str] = None
+    tech_description: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    latest_job: Optional[CopyrightJobResponse] = None
+
+    class Config:
+        from_attributes = True
 

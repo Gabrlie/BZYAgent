@@ -47,6 +47,18 @@
 | `GET` 或 `POST` | `/api/courses/{course_id}/generate-lesson-plan/stream` | 教案生成 SSE |
 | `GET` | `/api/courses/{course_id}/lesson-plans` | 教案列表 |
 
+## 软著材料
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `POST` | `/api/copyright/projects` | 创建软著项目 |
+| `GET` | `/api/copyright/projects` | 软著项目列表 |
+| `GET` | `/api/copyright/projects/{project_id}` | 软著项目详情 |
+| `PUT` | `/api/copyright/projects/{project_id}` | 更新软著项目 |
+| `POST` | `/api/copyright/projects/{project_id}/requirements` | 更新需求文档/说明 |
+| `POST` | `/api/copyright/projects/{project_id}/generate` | 触发后台生成任务 |
+| `GET` | `/api/copyright/projects/{project_id}/jobs/latest` | 获取最新任务（支持长轮询） |
+| `GET` | `/api/copyright/projects/{project_id}/download` | 下载 ZIP |
+
 ## 关键请求参数
 - 授课计划生成
 - `teacher_name` 授课教师
@@ -70,3 +82,4 @@
 - 失败响应遵循 FastAPI 的 `detail` 字段提示。
 - SSE 响应为 `text/event-stream`，数据体为 JSON 字符串。
 - 文档相关响应包含 `file_exists` 字段用于标记本地文件是否存在。
+- 软著材料生成使用后台任务与长轮询，不使用 SSE。

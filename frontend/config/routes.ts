@@ -95,6 +95,24 @@ export default [
     ],
   },
   {
+    path: '/copyright',
+    name: 'copyright',
+    icon: 'fileProtect',
+    routes: [
+      {
+        path: '/copyright',
+        component: './Copyright',
+        exact: true,
+      },
+      {
+        path: '/copyright/:id',
+        name: 'detail',
+        component: './Copyright/Detail',
+        hideInMenu: true,
+      },
+    ],
+  },
+  {
     path: '/papers',
     name: 'papers',
     icon: 'fileText',

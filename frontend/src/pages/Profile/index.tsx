@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { changePassword, changeUsername, updateUserSettings, getAvailableModels } from '@/services/auth';
 import { useModel } from '@umijs/max';
 import { ReloadOutlined } from '@ant-design/icons';
+import { formatBackendTime } from '@/utils/time';
 
 const Profile: React.FC = () => {
     const { message } = App.useApp();
@@ -161,7 +162,7 @@ const Profile: React.FC = () => {
                             <Descriptions.Item label="用户ID">{currentUser?.id}</Descriptions.Item>
                             <Descriptions.Item label="当前用户名">{currentUser?.username}</Descriptions.Item>
                             <Descriptions.Item label="注册时间">
-                                {currentUser?.created_at ? new Date(currentUser.created_at).toLocaleString('zh-CN') : '-'}
+                                {formatBackendTime(currentUser?.created_at)}
                             </Descriptions.Item>
                         </Descriptions>
 
